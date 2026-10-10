@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Grade 5 Studio</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Public+Sans:wght@400;500;600;700&display=swap">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2b6a53">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Grade 5">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
@@ -243,6 +251,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
         <div class="card stack"><h3>Full mock</h3><p class="small muted">30 questions across all 11 targets in roughly the paper’s proportions. About 25 minutes.</p><button class="btn primary" data-start="mock">Start full mock</button></div>
         <div class="card stack"><h3>Weak spots</h3><p class="small muted">12 questions from your four lowest-scoring targets.</p><button class="btn" data-start="weak">Start weak-spot drill</button></div>
         <div class="card stack"><h3>One topic</h3><p class="small muted">15 questions on a single target.</p><div class="row"><select id="topicPick"></select><button class="btn" data-start="topic">Start</button></div></div>
+        <div class="card stack"><h3>Sync check</h3><p class="small muted">3 random questions, just to confirm results are being recorded on every device.</p><button class="btn" data-start="quick">Start 3-question check</button></div>
       </div>
       <div class="grid g2">
         <div class="card stack">
@@ -695,6 +704,7 @@ const T = (() => {
   function buildTest(mode, topic, weights) {
     let list = [];
     if (mode === 'topic') { for (let i=0;i<15;i++) list.push(question(topic)); }
+    else if (mode === 'quick') { const ts = shuffle(Object.keys(GEN)).slice(0,3); ts.forEach(t=>list.push(question(t))); }
     else if (mode === 'sub') { for (let i=0;i<10;i++) list.push(questionSub(topic, weights && weights.__sub)); }
     else if (mode === 'weak') { const ws = Object.entries(weights||{}).sort((a,b)=>a[1]-b[1]).slice(0,4).map(e=>e[0]); const ts = ws.length?ws:Object.keys(GEN); for (let i=0;i<12;i++) list.push(question(ts[i%ts.length])); list = shuffle(list); }
     else { Object.entries(MOCK_MIX).forEach(([t,n])=>{ for (let i=0;i<n;i++) list.push(question(t)); }); list = shuffle(list); }
@@ -1092,7 +1102,7 @@ function renderTestsHome(){
   $('#hist').innerHTML = list.map(t=>{ const p = Math.round(100*t.score/t.total); return `<i class="${p<67?'fail':''} ${t.level!=='exam'?'found':''}" style="height:${Math.max(3,p)}%" title="${p}% (${t.level==='exam'?'exam':'foundation'} level)"></i>`; }).join('') || '<span class="small muted">No tests yet.</span>';
   const m = mockStats(); $('#histSummary').textContent = m.exam!==null ? `Last exam-level mocks: ${Math.round(m.exam)}% · pass line 67%` : m.found!==null ? `Foundation-level mocks: ${Math.round(m.found)}% · no exam-level mock yet` : 'Pass line on the real paper: 50/75 = 67%';
   $('#histTable tbody').innerHTML = tests.slice(0,10).map(t=>{ const weakest = Object.entries(t.byTopic||{}).filter(([k,v])=>v.n).sort((a,b)=>(a[1].r/a[1].n)-(b[1].r/b[1].n))[0]; const tn = weakest ? TOPICS.find(x=>x.id===weakest[0]) : null;
-    return `<tr><td>${esc(new Date(t.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'}))}</td><td>${t.mode==='mock'?'Full mock':t.mode==='weak'?'Weak spots':t.mode==='sub'?'Sub-area':'Topic'} <span class="tag">${t.level==='exam'?'G5':'G3–4'}</span></td><td><b>${t.score}/${t.total}</b> (${Math.round(100*t.score/t.total)}%)</td><td class="small">${tn?esc(tn.name)+` · ${weakest[1].r}/${weakest[1].n}`:''}</td></tr>`; }).join('') || '<tr><td colspan="4" class="muted small">Your results will appear here.</td></tr>';
+    return `<tr><td>${esc(new Date(t.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'}))}</td><td>${t.mode==='mock'?'Full mock':t.mode==='weak'?'Weak spots':t.mode==='sub'?'Sub-area':t.mode==='quick'?'Sync check':'Topic'} <span class="tag">${t.level==='exam'?'G5':'G3–4'}</span></td><td><b>${t.score}/${t.total}</b> (${Math.round(100*t.score/t.total)}%)</td><td class="small">${tn?esc(tn.name)+` · ${weakest[1].r}/${weakest[1].n}`:''}</td></tr>`; }).join('') || '<tr><td colspan="4" class="muted small">Your results will appear here.</td></tr>';
   $('#accByTopic').innerHTML = TOPICS.map(t=>scoreRow(esc(t.name), topicScore(t.id))).join('');
   const tp = theoryPct(); const projected = m.exam!==null ? tp*0.5+m.exam*0.5 : tp;
   const tag = projected>=87?['Distinction track','good']:projected>=80?['Merit track','good']:projected>=67?['Pass track','warn']:['Below pass line','bad'];
@@ -1133,7 +1143,7 @@ function startTest(mode, topic, sub){
   T.setLevel(S.settings.level||'foundation'); const w = weakWeights(); if (sub) w.__sub = sub; const qs = T.buildTest(mode, topic, w);
   run = { mode, topic, sub, qs, i:0, score:0, byTopic:{}, bySub:{}, answered:false };
   $('#testHome').hidden = true; $('#testDone').hidden = true; $('#testRun').hidden = false;
-  $('#runLabel').textContent = ((S.settings.level||'foundation')==='exam' ? 'Exam level · ' : 'Foundation level · ') + (mode==='mock' ? 'Full mock' : mode==='weak' ? 'Weak-spot drill' : mode==='sub' ? sub : 'Topic drill: ' + TOPICS.find(t=>t.id===topic).name);
+  $('#runLabel').textContent = ((S.settings.level||'foundation')==='exam' ? 'Exam level · ' : 'Foundation level · ') + (mode==='mock' ? 'Full mock' : mode==='weak' ? 'Weak-spot drill' : mode==='quick' ? 'Sync check' : mode==='sub' ? sub : 'Topic drill: ' + TOPICS.find(t=>t.id===topic).name);
   showQ();
 }
 function showQ(){
