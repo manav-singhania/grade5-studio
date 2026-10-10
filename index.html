@@ -118,6 +118,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 .linkbtn:hover{text-decoration-color:var(--accent)}
 .strip{display:grid;grid-template-columns:repeat(14,1fr);gap:4px}
 .strip i{aspect-ratio:1;border-radius:4px;background:var(--surface-2);display:grid;place-items:center;font-style:normal;font-size:10px;color:var(--muted)}
+.strip i.travel{background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 3px,var(--line) 3px,var(--line) 6px)}
 .strip i.full{background:var(--good);color:#fff}.strip i.part{background:var(--warn);color:#fff}.strip i.missed{background:var(--bad);color:#fff}.strip i.open{outline:2px solid var(--accent);outline-offset:-2px}
 .logrow{display:grid;grid-template-columns:16px 1fr auto;gap:8px;align-items:baseline;font-size:13px}
 .logrow.ok span:first-child{color:var(--good);font-weight:700}.logrow.miss span:first-child{color:var(--bad);font-weight:700}.logrow.miss{color:var(--muted)}
@@ -321,7 +322,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
     <div class="card stack">
       <div class="row between"><h3>Practice log</h3><span class="small muted" id="logSummary"></span></div>
       <div class="strip" id="logStrip"></div>
-      <p class="small muted">Last 28 days · green = everything done · amber = partly · red = planned but nothing ticked · grey = no plan that day.</p>
+      <p class="small muted">Last 28 days · green = everything done · amber = partly · red = planned but nothing ticked · striped = travelling · grey = no plan that day.</p>
       <div class="tbl"><table id="logTable"><thead><tr><th>Day</th><th>Planned → done</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
@@ -916,7 +917,7 @@ const DEFAULT = {
   seed: Object.fromEntries(TOPICS.map(t=>[t.id,0])),
   pieces: Object.fromEntries(PIECES.map(p=>[p.id,0])),
   scales: {}, covered: {},
-  settings:{name:'', theoryDate:'2026-11-30', pracDate:'2027-04-01', mins:50, level:'foundation', lesson1:'2 × 30 min a week (theory + practical)', lesson2:'1 × 60 min a week (practical)'}
+  settings:{name:'', theoryDate:'2026-11-30', pracDate:'2027-04-01', mins:50, level:'foundation', goal:'distinction', travel:[['2026-12-02','2026-12-24']], lesson1:'2 × 30 min a week (theory + practical)', lesson2:'1 × 60 min a week (practical)'}
 };
 let S = JSON.parse(JSON.stringify(DEFAULT));
 let tests = []; let logs = {}; let videos = {}; let practice = {}; let todayFrozen = false;
@@ -986,6 +987,7 @@ const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
 const daysTo = iso => Math.ceil((new Date(iso+'T00:00:00') - new Date(new Date().toDateString()))/86400000);
 const todayISO = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 const RECENT = 30*86400000;
+const onTravel = d => (S.settings.travel||[]).some(([a,b]) => d >= a && d <= b);
 function recentTests(){ const cut = Date.now()-RECENT; return tests.filter(t=>t.ts>=cut).slice(0,40); }
 function evidence(){
   const T = {}, SUB = {};
@@ -998,7 +1000,7 @@ let EV = {T:{}, SUB:{}};
 function topicScore(id){ const e = EV.T[id]; const seed = Number(S.seed[id]||0); if (!e || !e.n) return {score: seed*0.6, n:0, nx:0, basis:'seed'};
   const ev = 100*e.wr/e.n; const k = Math.min(1, e.n/8); return {score: ev*k + seed*0.6*(1-k), n:e.n, nx:e.nx, acc: e.r/e.n, basis: k<1?'mixed':'evidence'}; }
 function subScore(name){ const e = EV.SUB[name]; if (!e || !e.n) return null; return {score:100*e.wr/e.n, n:e.n, nx:e.nx, acc:e.r/e.n}; }
-function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; if (sc.score < 45) return ['Needs work','bad']; if (sc.score < 75) return ['Developing','warn']; if (sc.nx < 6) return ['Secure at foundation','warn']; return ['Secure','good']; }
+function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; if (sc.score < 45) return ['Needs work','bad']; if (sc.score < 75) return ['Developing','warn']; if (sc.nx < 6) return ['Secure at foundation','warn']; if (sc.score >= 88 && sc.nx >= 10) return ['Distinction level','good']; return ['Secure','good']; }
 function theoryPct(){ let w=0,s=0; TOPICS.forEach(t=>{ w+=TOPIC_WEIGHT[t.id]; s+=TOPIC_WEIGHT[t.id]*topicScore(t.id).score; }); return w?s/w:0; }
 function mockStats(){ const ex = tests.filter(t=>t.mode==='mock'&&t.level==='exam').slice(0,3), fo = tests.filter(t=>t.mode==='mock'&&t.level!=='exam').slice(0,3); return { exam: ex.length?avg(ex.map(t=>100*t.score/t.total)):null, found: fo.length?avg(fo.map(t=>100*t.score/t.total)):null, nExam: ex.length }; }
 function theoryReadiness(){ const m = mockStats(); const tp = theoryPct(); return m.exam===null ? tp*0.9 : tp*0.5 + m.exam*0.5; }
@@ -1031,7 +1033,12 @@ function renderToday(){
   const weakestPiece = PIECES.slice().sort((a,b)=>(S.pieces[a.id]||0)-(S.pieces[b.id]||0))[0];
   const isVideo = v => v && /youtube\.com|youtu\.be|vimeo\.com/.test(v.url);
   const items = [];
-  if (phase1) {
+  if (onTravel(date)) {
+    $('#todayPhase').textContent = 'Travelling · light plan'; $('#todayPhase').className='tag';
+    items.push({k:'drill', m:10, t:'Keep the terms and instruments warm', d:'10 questions a day on the two memorisation topics so nothing fades on the trip.', acts:[{label:'▶ Terms drill', start:'sub', topic:'t11', sub:'Italian terms'},{label:'Instruments drill', sec:true, start:'topic', topic:'t10'}]});
+    items.push({k:'learn', m:10, t:'Aural C vocabulary quiz', d:'Five minutes of style-and-period questions in the trainer.', acts:[{label:'▶ Aural trainer', tool:'aural'}]});
+    $('#lessonNote').innerHTML = '<b>On the road:</b> no piano, so theory and aural vocabulary only. Days away are not counted as missed.';
+  } else if (phase1) {
     $('#todayPhase').textContent = 'Phase 1 · Theory push'; $('#todayPhase').className='tag new';
     const vl = (videos[learn.id]&&videos[learn.id].links)||[]; const tv = (S.settings.level||'foundation')==='foundation' ? (vl.find(v=>v.level==='G4') || vl[0]) : (vl.find(v=>v.level!=='G4') || vl[0]);
     const learnActs = []; if (tv) learnActs.push({label:(isVideo(tv)?'▶ Watch: ':'📖 Read: ') + (tv.source||'').split(' ·')[0], href:tv.url}); learnActs.push({label:'Key facts · 2-min read', sec:true, topic:learn.id});
@@ -1051,12 +1058,12 @@ function renderToday(){
   if (logs[date] && Array.isArray(logs[date].plan) && logs[date].plan.length) plan = logs[date].plan;
   else if (!todayFrozen) { todayFrozen = true; const rec = { date, done: (logs[date]&&logs[date].done)||[], plan: items.map(it=>({k:it.k, t:it.t, m:it.m, d:it.d, acts:it.acts||[]})), phase: phase1?1:2 }; logs[date] = rec; if (db) db.collection('log').doc(date).set(rec).catch(()=>{}); else lsSet('g5:logs', logs); }
   const done = (logs[date] && logs[date].done) || [];
-  $('#todayList').innerHTML = plan.map(it => `<div class="today-item"><span class="mins">${it.m}′</span><span><b>${esc(it.t)}</b><br><span class="small muted">${esc(it.d)}</span>${it.acts?`<span class="acts">${it.acts.map(a=> a.href ? `<a href="${esc(a.href)}" target="_blank" rel="noopener" class="${a.sec?'sec':''}">${esc(a.label)}</a>` : `<button type="button" class="${a.sec?'sec':''}" ${a.start?`data-start="${a.start}" data-starttopic="${a.topic||''}"`:''} ${a.topic&&!a.start?`data-opentopic="${a.topic}"`:''} ${a.section?`data-section="${a.section}"`:''} ${a.tool?`data-tool="${a.tool}"`:''}>${esc(a.label)}</button>`).join('')}</span>`:''}</span><input type="checkbox" data-done="${it.k}" ${done.includes(it.k)?'checked':''} aria-label="Done"></div>`).join('');
+  $('#todayList').innerHTML = plan.map(it => `<div class="today-item"><span class="mins">${it.m}′</span><span><b>${esc(it.t)}</b><br><span class="small muted">${esc(it.d)}</span>${it.acts?`<span class="acts">${it.acts.map(a=> a.href ? `<a href="${esc(a.href)}" target="_blank" rel="noopener" class="${a.sec?'sec':''}">${esc(a.label)}</a>` : `<button type="button" class="${a.sec?'sec':''}" ${a.start?`data-start="${a.start}" data-starttopic="${a.topic||''}" data-startsub="${esc(a.sub||'')}"`:''} ${a.topic&&!a.start?`data-opentopic="${a.topic}"`:''} ${a.section?`data-section="${a.section}"`:''} ${a.tool?`data-tool="${a.tool}"`:''}>${esc(a.label)}</button>`).join('')}</span>`:''}</span><input type="checkbox" data-done="${it.k}" ${done.includes(it.k)?'checked':''} aria-label="Done"></div>`).join('');
   $('#todayTitle').textContent = `Today · ${mins} minutes`;
   $('#todayNote').innerHTML = `Tick items as you finish them — they go into your practice log. <button type="button" class="btn sm" id="replan" style="margin-left:6px">Re-plan today</button>`;
   const tr = theoryReadiness(), pr = practicalReadiness(); const m = mockStats();
   $('#readiness').innerHTML = [['Theory',tr,`${daysTo(S.settings.theoryDate)} days`],['Practical',pr,`${daysTo(S.settings.pracDate)} days`]].map(([n,v,d])=>`<div class="card"><div class="eyebrow">${n}</div><div class="kpi">${Math.round(v)}%</div><div class="small muted">${d}</div><div class="bar thin" style="margin-top:8px"><i style="width:${Math.round(v)}%"></i></div></div>`).join('');
-  $('#readinessNote').textContent = `Theory = topic scores (from drills) blended with your last exam-level mocks${m.exam!==null?` (avg ${Math.round(m.exam)}%, pass line 67%)`:' (none yet)'}. Practical weights the four sections by their exam marks; pieces and scales come from the milestone stages you tick.`;
+  $('#readinessNote').textContent = `Goal: Distinction (theory 65/75 = 87%; practical 130/150). Theory = topic scores blended with your last exam-level mocks${m.exam!==null?` (avg ${Math.round(m.exam)}%)`:' (none yet)'}. Practical weights the four sections by their exam marks; pieces and scales come from the milestone stages you tick.`;
   const pr3 = order.slice(0,3).map(t=>{ const sc = topicScore(t.id); const st = statusOf(sc); return `<div class="row between" style="flex-wrap:nowrap"><span style="flex:1">${esc(t.name)} ${t.isNew?'<span class="tag new">new at G5</span>':''}</span><span class="tag ${st[1]}">${st[0]}</span><span class="pct">${sc.n?Math.round(sc.score)+'%':'–'}</span></div>`; });
   const practicalPri = [['Pieces',piecesPct()],['Scales & arpeggios',scalesPct()],['Sight-reading',srPct()],['Aural',auralPct()]].sort((a,b)=>a[1]-b[1]).slice(0,2).map(([n,v])=>`<div class="row between"><span>${n}</span><span class="pct">${Math.round(v)}%</span></div>`);
   $('#priorities').innerHTML = pr3.concat(practicalPri).join('');
@@ -1107,7 +1114,7 @@ function renderTestsHome(){
   const tag = projected>=87?['Distinction track','good']:projected>=80?['Merit track','good']:projected>=67?['Pass track','warn']:['Below pass line','bad'];
   $('#readyTag').textContent = tag[0]; $('#readyTag').className = 'tag '+tag[1];
   $('#testReady').innerHTML = [['Projected paper', projected],['Topic scores', tp],['Exam-level mocks', m.exam===null?0:m.exam]].map(([n,v])=>`<div class="card"><div class="eyebrow">${n}</div><div class="kpi">${Math.round(v)}%</div><div class="bar thin" style="margin-top:8px"><i style="width:${Math.round(v)}%"></i></div></div>`).join('');
-  $('#testReadyNote').textContent = `Pass 67% · Merit 80% · Distinction 87%. Projection = half topic scores, half your last three exam-level mocks${m.nExam<3?` (${m.nExam} so far — do mocks at Exam level once foundation drills are secure)`:''}. Foundation-level mocks don't count towards the projection.`;
+  $('#testReadyNote').textContent = `Target: Distinction 87% (65/75). Pass 67% · Merit 80%. Projection = half topic scores, half your last three exam-level mocks${m.nExam<3?` (${m.nExam} so far — do mocks at Exam level once foundation drills are secure)`:''}. Foundation-level mocks don't count towards the projection.`;
 }
 
 function renderPractical(){
@@ -1124,7 +1131,7 @@ function renderSR(){ const el = $('#srAreas'); if (!el) return; el.innerHTML = S
 function renderLog(){
   const label = {learn:'Theory learning',drill:'Drill / mock',prac:'Practical',prac2:'Pieces',prac3:'Sight-reading / aural'}; const today = todayISO();
   const days = []; for (let i=27;i>=0;i--) { const dt = new Date(); dt.setDate(dt.getDate()-i); days.push(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')); }
-  const stat = iso => { const v = logs[iso]; if (!v || !Array.isArray(v.plan) || !v.plan.length) return {state:'none', pm:0, dm:0, n:0, dn:0}; const done = new Set(v.done||[]); const pm = v.plan.reduce((s,it)=>s+(it.m||0),0); const dm = v.plan.filter(it=>done.has(it.k)).reduce((s,it)=>s+(it.m||0),0); const dn = v.plan.filter(it=>done.has(it.k)).length; return {state: dn===v.plan.length?'full': dn>0?'part': iso===today?'open':'missed', pm, dm, n:v.plan.length, dn}; };
+  const stat = iso => { const v = logs[iso]; if (!v || !Array.isArray(v.plan) || !v.plan.length) return {state:'none', pm:0, dm:0, n:0, dn:0}; const done = new Set(v.done||[]); const pm = v.plan.reduce((s,it)=>s+(it.m||0),0); const dm = v.plan.filter(it=>done.has(it.k)).reduce((s,it)=>s+(it.m||0),0); const dn = v.plan.filter(it=>done.has(it.k)).length; return {state: dn===v.plan.length?'full': dn>0?'part': iso===today?'open': onTravel(iso)?'travel':'missed', pm, dm, n:v.plan.length, dn}; };
   $('#logStrip').innerHTML = days.map(iso=>{ const s = stat(iso); const dt = new Date(iso+'T00:00:00'); return `<i class="${s.state}" title="${iso}: ${s.state==='none'?'no plan':`${s.dn}/${s.n} items, ${s.dm}/${s.pm} min`}"><b>${dt.getDate()}</b></i>`; }).join('');
   const last14 = days.slice(-14).map(stat).filter(s=>s.state!=='none'); const planned = last14.reduce((a,s)=>a+s.pm,0), doneM = last14.reduce((a,s)=>a+s.dm,0); const full = last14.filter(s=>s.state==='full').length, missed = last14.filter(s=>s.state==='missed').length;
   $('#logSummary').textContent = last14.length ? `Last 14 days: ${full} complete, ${missed} missed, ${doneM} of ${planned} planned minutes (${planned?Math.round(100*doneM/planned):0}%)` : '';
@@ -1197,7 +1204,7 @@ document.addEventListener('click', e => {
   if (b.dataset.level) { S.settings.level = b.dataset.level; saveState(); renderLevel(); renderTheory(); renderToday(); toast(b.dataset.level==='exam'?'Exam-level questions':'Foundation-level questions'); return; }
   if (b.dataset.drill) { showTab('tests'); startTest('topic', b.dataset.drill); window.scrollTo({top:0}); return; }
   if (b.dataset.subdrill) { showTab('tests'); startTest('sub', b.dataset.subdrill, b.dataset.sub); window.scrollTo({top:0}); return; }
-  if (b.dataset.start) { showTab('tests'); startTest(b.dataset.start, b.dataset.starttopic || $('#topicPick').value); window.scrollTo({top:0}); return; }
+  if (b.dataset.start) { showTab('tests'); startTest(b.dataset.start, b.dataset.starttopic || $('#topicPick').value, b.dataset.startsub || null); window.scrollTo({top:0}); return; }
   if (b.dataset.opentopic) { showTab('theory'); const d = document.querySelector(`details[data-topic="${b.dataset.opentopic}"]`); if (d) { d.open = true; d.scrollIntoView({behavior:'smooth', block:'start'}); } return; }
   if (b.dataset.tool) { if (b.dataset.tool==='sr') { showTab('sr'); srNew(); window.scrollTo({top:0}); } else { showTab('practical'); const s = document.getElementById('secAural'); if (s) s.scrollIntoView({behavior:'smooth', block:'start'}); auShow('A'); } return; }
   if (b.dataset.section) { showTab('practical'); const s = document.getElementById(b.dataset.section); if (s) s.scrollIntoView({behavior:'smooth', block:'start'}); return; }

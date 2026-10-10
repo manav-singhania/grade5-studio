@@ -108,6 +108,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 .linkbtn:hover{text-decoration-color:var(--accent)}
 .strip{display:grid;grid-template-columns:repeat(14,1fr);gap:4px}
 .strip i{aspect-ratio:1;border-radius:4px;background:var(--surface-2);display:grid;place-items:center;font-style:normal;font-size:10px;color:var(--muted)}
+.strip i.travel{background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 3px,var(--line) 3px,var(--line) 6px)}
 .strip i.full{background:var(--good);color:#fff}.strip i.part{background:var(--warn);color:#fff}.strip i.missed{background:var(--bad);color:#fff}.strip i.open{outline:2px solid var(--accent);outline-offset:-2px}
 .logrow{display:grid;grid-template-columns:16px 1fr auto;gap:8px;align-items:baseline;font-size:13px}
 .logrow.ok span:first-child{color:var(--good);font-weight:700}.logrow.miss span:first-child{color:var(--bad);font-weight:700}.logrow.miss{color:var(--muted)}
@@ -125,6 +126,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media (max-width:480px){h1{font-size:26px} .today-item{grid-template-columns:auto 1fr} .today-item .mins{grid-row:span 2} .score{grid-template-columns:1fr auto} .score .n{grid-column:1}}
 
+.strip i.travel{background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 3px,var(--line) 3px,var(--line) 6px)}
 .alert{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:14px}
 .alert.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,var(--surface))}
 .alert.warn{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,var(--surface))}
@@ -159,7 +161,7 @@ html,body{margin:0}[hidden]{display:none!important}
   <div class="grid g2">
     <div class="card stack"><h3>Practical</h3><div id="pracRows"></div></div>
     <div class="stack">
-      <div class="card stack"><h3>Checkpoints</h3><div class="stack" style="gap:4px" id="checkpoints"></div></div>
+      <div class="card stack"><h3>Checkpoints · goal: Distinction</h3><div class="stack" style="gap:4px" id="checkpoints"></div><div class="row small" style="gap:14px;margin-top:4px"><label class="row" style="gap:6px"><input type="checkbox" data-flag="theoryBooked"> Theory booked</label><label class="row" style="gap:6px"><input type="checkbox" data-flag="theorySat"> Theory sat</label><label class="row" style="gap:6px"><input type="checkbox" data-flag="practicalBooked"> Practical booked</label></div></div>
       <div class="card stack"><h3>For the next lesson</h3><ul class="facts" id="brief"></ul></div>
     </div>
   </div>
@@ -245,7 +247,7 @@ const DEFAULT = {
   seed: Object.fromEntries(TOPICS.map(t=>[t.id,0])),
   pieces: Object.fromEntries(PIECES.map(p=>[p.id,0])),
   scales: {}, covered: {},
-  settings:{name:'', theoryDate:'2026-11-30', pracDate:'2027-04-01', mins:50, level:'foundation', lesson1:'2 × 30 min a week (theory + practical)', lesson2:'1 × 60 min a week (practical)'}
+  settings:{name:'', theoryDate:'2026-11-30', pracDate:'2027-04-01', mins:50, level:'foundation', goal:'distinction', travel:[['2026-12-02','2026-12-24']], lesson1:'2 × 30 min a week (theory + practical)', lesson2:'1 × 60 min a week (practical)'}
 };
 let S = JSON.parse(JSON.stringify(DEFAULT));
 let tests = []; let logs = {}; let videos = {}; let practice = {}; let todayFrozen = false;
@@ -315,6 +317,7 @@ const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
 const daysTo = iso => Math.ceil((new Date(iso+'T00:00:00') - new Date(new Date().toDateString()))/86400000);
 const todayISO = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 const RECENT = 30*86400000;
+const onTravel = d => (S.settings.travel||[]).some(([a,b]) => d >= a && d <= b);
 function recentTests(){ const cut = Date.now()-RECENT; return tests.filter(t=>t.ts>=cut).slice(0,40); }
 function evidence(){
   const T = {}, SUB = {};
@@ -327,7 +330,7 @@ let EV = {T:{}, SUB:{}};
 function topicScore(id){ const e = EV.T[id]; const seed = Number(S.seed[id]||0); if (!e || !e.n) return {score: seed*0.6, n:0, nx:0, basis:'seed'};
   const ev = 100*e.wr/e.n; const k = Math.min(1, e.n/8); return {score: ev*k + seed*0.6*(1-k), n:e.n, nx:e.nx, acc: e.r/e.n, basis: k<1?'mixed':'evidence'}; }
 function subScore(name){ const e = EV.SUB[name]; if (!e || !e.n) return null; return {score:100*e.wr/e.n, n:e.n, nx:e.nx, acc:e.r/e.n}; }
-function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; if (sc.score < 45) return ['Needs work','bad']; if (sc.score < 75) return ['Developing','warn']; if (sc.nx < 6) return ['Secure at foundation','warn']; return ['Secure','good']; }
+function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; if (sc.score < 45) return ['Needs work','bad']; if (sc.score < 75) return ['Developing','warn']; if (sc.nx < 6) return ['Secure at foundation','warn']; if (sc.score >= 88 && sc.nx >= 10) return ['Distinction level','good']; return ['Secure','good']; }
 function theoryPct(){ let w=0,s=0; TOPICS.forEach(t=>{ w+=TOPIC_WEIGHT[t.id]; s+=TOPIC_WEIGHT[t.id]*topicScore(t.id).score; }); return w?s/w:0; }
 function mockStats(){ const ex = tests.filter(t=>t.mode==='mock'&&t.level==='exam').slice(0,3), fo = tests.filter(t=>t.mode==='mock'&&t.level!=='exam').slice(0,3); return { exam: ex.length?avg(ex.map(t=>100*t.score/t.total)):null, found: fo.length?avg(fo.map(t=>100*t.score/t.total)):null, nExam: ex.length }; }
 function theoryReadiness(){ const m = mockStats(); const tp = theoryPct(); return m.exam===null ? tp*0.9 : tp*0.5 + m.exam*0.5; }
@@ -373,13 +376,14 @@ function weeklyTrend(){ // theory score per ISO week from tests
   const weeks = {}; tests.forEach(t=>{ const d = new Date(t.ts); const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay()+6)%7)); const w = iso(monday); const e = weeks[w] = weeks[w] || {r:0,n:0,wr:0, mocks:[]}; const wt = t.level==='exam'?1:FOUND_CAP; e.r += t.score; e.n += t.total; e.wr += t.score*wt; if (t.mode==='mock') e.mocks.push(Math.round(100*t.score/t.total) + (t.level==='exam'?'':'ᶠ')); });
   return Object.entries(weeks).sort((a,b)=>a[0].localeCompare(b[0])).slice(-8).map(([w,e])=>({week:w, score:e.n?Math.round(100*e.wr/e.n):null, n:e.n, mocks:e.mocks})); }
 function alerts(){
-  const A = []; const today = iso(new Date()); const d14 = lastDays(14); const stats = d14.map(d=>dayStat(d)).filter(Boolean);
-  const idle = activityOn(today) ? 0 : (()=>{ let n=0; for (const d of lastDays(14).reverse()) { if (d===today) continue; if (activityOn(d)) break; n++; } return n; })();
+  const A = []; const today = iso(new Date()); const d14 = lastDays(14).filter(d=>!onTravel(d)); const stats = d14.map(d=>dayStat(d)).filter(Boolean);
+  const idle = activityOn(today) ? 0 : (()=>{ let n=0; for (const d of lastDays(14).reverse()) { if (d===today || onTravel(d)) continue; if (activityOn(d)) break; n++; } return n; })();
   if (idle >= 2) A.push(['bad', `No practice logged for ${idle} days.`]);
   const missedMin = stats.reduce((a,s)=>a+(s.pm-s.dm),0), plannedMin = stats.reduce((a,s)=>a+s.pm,0);
   if (plannedMin && missedMin/plannedMin > 0.4) A.push(['warn', `Only ${Math.round(100*(plannedMin-missedMin)/plannedMin)}% of planned minutes done in the last 14 days.`]);
-  const m = mockStats(); if (m.exam!==null && m.exam < 67) A.push(['warn', `Exam-level mocks averaging ${Math.round(m.exam)}% — pass line is 67%.`]);
-  const dT = daysTo(S.settings.theoryDate); if (dT <= 21 && (m.exam===null || m.exam < 60)) A.push(['bad', `${dT} days to the theory date with ${m.exam===null?'no exam-level mock yet':'mocks under 60%'} — consider booking the following month.`]);
+  const m = mockStats(); if (m.exam!==null && m.exam < 87) A.push([m.exam<67?'bad':'warn', `Exam-level mocks averaging ${Math.round(m.exam)}% — distinction needs 87%${m.exam<67?' (pass line 67%)':''}.`]);
+  const dT = daysTo(S.settings.theoryDate); if (dT <= 30 && dT > 0 && !(S.settings.theoryBooked)) A.push(['bad', `Theory exam not marked as booked with ${dT} days to go — book on abrsm.org (28-day window) so it is sat before the 2 Dec trip.`]);
+  if (dT <= 21 && (m.exam===null || m.exam < 75)) A.push(['warn', `${dT} days to the theory date with ${m.exam===null?'no exam-level mock yet':'mocks under 75%'} — a pass is likely but distinction is not; the next window after the trip is late January.`]);
   const weak = TOPICS.map(t=>({t, sc: topicScore(t.id)})).filter(x=>x.sc.n>=4 && x.sc.score<45); if (weak.length) A.push(['warn', 'Needs work: ' + weak.map(x=>x.t.name).join('; ')]);
   const notDrilled = TOPICS.filter(t=>!(EV.T[t.id]&&EV.T[t.id].n)); if (notDrilled.length>=4) A.push(['', `${notDrilled.length} theory targets have never been drilled: ${notDrilled.map(t=>t.name.split(' ')[0]+'…').join(', ')}`]);
   const pcs = PIECES.filter(p=>(S.pieces[p.id]||0)<3); const dP = daysTo(S.settings.pracDate); if (dP < 120 && pcs.length) A.push(['warn', `${pcs.length} piece${pcs.length>1?'s':''} not yet up to tempo with ${dP} days to the practical.`]);
@@ -408,7 +412,7 @@ function render(){
   $('#alerts').innerHTML = alerts().map(([c,t])=>`<div class="alert ${c}">${esc(t)}</div>`).join('');
   // consistency
   const days = lastDays(28); const today = iso(new Date());
-  $('#strip').innerHTML = days.map(d=>{ const s = dayStat(d); const act = activityOn(d); const cls = !s ? (act?'part':'none') : s.dn===s.n?'full': s.dn>0?'part': d===today?'open':'missed'; return `<i class="${cls}" title="${d}${s?`: ${s.dn}/${s.n} items, ${s.dm}/${s.pm} min`:act?': activity, no plan opened':': nothing'}"><b>${Number(d.slice(-2))}</b></i>`; }).join('');
+  $('#strip').innerHTML = days.map(d=>{ const s = dayStat(d); const act = activityOn(d); const cls = !s ? (act?'part': onTravel(d)?'travel':'none') : s.dn===s.n?'full': s.dn>0?'part': d===today?'open': onTravel(d)?'travel':'missed'; return `<i class="${cls}" title="${d}${s?`: ${s.dn}/${s.n} items, ${s.dm}/${s.pm} min`:act?': activity, no plan opened':': nothing'}"><b>${Number(d.slice(-2))}</b></i>`; }).join('');
   const st14 = lastDays(14).map(d=>dayStat(d)).filter(Boolean); const pm = st14.reduce((a,s)=>a+s.pm,0), dm = st14.reduce((a,s)=>a+s.dm,0);
   const active14 = lastDays(14).reduce((a,d)=>a+Object.values((practice[d]||{}).time||{}).reduce((x,y)=>x+y,0),0);
   $('#consistency').textContent = st14.length ? `Last 14 days: ${st14.filter(s=>s.dn===s.n).length} days fully done, ${st14.filter(s=>s.dn===0).length} planned but untouched, ${dm}/${pm} planned minutes ticked (${pm?Math.round(100*dm/pm):0}%). Measured active time in the app: ${Math.round(active14/60)} min.` : 'No daily plans opened yet.';
@@ -425,7 +429,16 @@ function render(){
   $('#pracRows').innerHTML = PIECES.map(p=>`<div class="score"><span>${p.list} ${esc(p.composer)}</span><span class="n">${esc(PIECE_STAGES[S.pieces[p.id]||0])}</span><span class="pct">${Math.round(100*(S.pieces[p.id]||0)/5)}%</span>${bar(100*(S.pieces[p.id]||0)/5)}</div>`).join('') + `<div class="score"><span>Scales & arpeggios</span><span class="n">${SCALE_GROUPS.flatMap(g=>g.items).filter(i=>(S.scales[i[0]]||0)>=2).length}/28 from memory</span><span class="pct">${Math.round(scalesPct())}%</span>${bar(scalesPct())}</div>` + SR_AREAS.slice(0,2).map(([n,f])=>{ const sc = srAreaScore(f); return `<div class="score"><span>Sight-reading · ${n}</span><span class="n">${sc?sc.n+' pieces':'none'}</span><span class="pct">${sc?Math.round(sc.score)+'%':'–'}</span>${bar(sc?sc.score:0)}</div>`; }).join('') + AURAL.map(a=>{ const sc = auralScore(a.id); return `<div class="score"><span>Aural ${a.id}</span><span class="n">${sc?sc.n+' rounds':'none'}</span><span class="pct">${sc?Math.round(sc.score)+'%':'–'}</span>${bar(sc?sc.score:0)}</div>`; }).join('');
   $('#brief').innerHTML = teacherBrief().map(l=>`<li>${esc(l)}</li>`).join('');
   // checkpoints
-  const cps = [['2026-10-25','Keys drills secure at foundation (12+/15 twice)', (subScore('Major key signatures')||{score:0}).score>=75 && (subScore('Minor key signatures')||{score:0}).score>=75],['2026-11-14','Exam-level mock ≥ 60% — else book December', m.exam!==null && m.exam>=60],['2026-11-21','Exam-level mocks ≥ 70%', m.exam!==null && m.exam>=70],['2027-01-31','All three pieces up to tempo (stage 3)', PIECES.every(p=>(S.pieces[p.id]||0)>=3)]];
+  const cps = [
+    ['2026-10-25','Keys drills secure at foundation (12+/15 twice)', (subScore('Major key signatures')||{score:0}).score>=75 && (subScore('Minor key signatures')||{score:0}).score>=75],
+    ['2026-11-01','Book the online theory exam on abrsm.org (28-day window; sit by 30 Nov, before the trip)', !!S.settings.theoryBooked],
+    ['2026-11-07','Exam-level mocks ≥ 75%', m.exam!==null && m.exam>=75],
+    ['2026-11-21','Exam-level mocks ≥ 87% (distinction line) — if under 80%, sit anyway and plan a resit after the trip', m.exam!==null && m.exam>=87],
+    ['2026-11-30','Theory exam sat (before travel 2–24 Dec)', !!S.settings.theorySat],
+    ['2026-12-01','Decide practical session: all pieces at stage ≥ 2 and scales ≥ 50% → book Mar–Apr; else aim Jun–Jul', PIECES.every(p=>(S.pieces[p.id]||0)>=2) && scalesPct()>=50],
+    ['2026-12-10','Practical booking window (Singapore Session 1 opens early–mid Dec, 16:00 SGT, from abroad)', !!S.settings.practicalBooked],
+    ['2027-01-31','All three pieces up to tempo (stage 3); stage 4 for a distinction', PIECES.every(p=>(S.pieces[p.id]||0)>=3)]
+  ];
   $('#checkpoints').innerHTML = cps.map(([d,t,ok])=>{ const due = daysTo(d); return `<div class="logrow ${ok?'ok':due<0?'miss':''}"><span>${ok?'✓':due<0?'✗':'·'}</span><span>${esc(t)}</span><span class="small muted">${d.slice(5)}${due>=0?` (${due} d)`:''}</span></div>`; }).join('');
   // daily activity (last 14 days)
   const label = {learn:'Learn',drill:'Drill/mock',prac:'Practical',prac2:'Pieces',prac3:'SR/aural'};
@@ -440,8 +453,11 @@ function render(){
     if (au.length) acts.push('Aural: ' + au.map(([k,x])=>`${k} ×${x.n} (${x.ok} ok)`).join(', '));
     if (!acts.length && !total && !v) return '';
     return `<tr><td style="white-space:nowrap"><b>${new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</b><br>${timeTxt}</td><td><div class="row" style="gap:4px;margin-bottom:4px">${ticks}</div>${acts.length?`<ul class="facts small">${acts.map(x=>`<li>${x}</li>`).join('')}</ul>`:'<span class="small muted">no tests, sight-reading or aural logged</span>'}</td></tr>`; }).join('') || '<tr><td colspan="2" class="small muted">No activity yet.</td></tr>';
+  document.querySelectorAll('[data-flag]').forEach(c=>{ c.checked = !!S.settings[c.dataset.flag]; });
   const ta = $('#parentNotes'); if (parentNotes && document.activeElement !== ta) ta.value = parentNotes.text || '';
 }
+function setFlag(k, v){ S.settings[k] = v; rpc({op:'set', path:'state/main', data:S}).then(()=>{ render(); }).catch(()=>{}); }
+document.addEventListener('change', e => { const c = e.target.closest('[data-flag]'); if (c) setFlag(c.dataset.flag, c.checked); });
 function saveNotes(){ const text = $('#parentNotes').value; parentNotes = {text, updated: new Date().toISOString()}; rpc({op:'set', path:'parent/notes', data: parentNotes}).then(()=>{ $('#notesStatus').textContent = 'Saved'; }).catch(()=>{ $('#notesStatus').textContent = 'Could not save'; }); }
 function reportForClaude(){ EV = evidence(); const L = [`PARENT MONITOR — ${iso(new Date())} — ${S.settings.name||''}`]; alerts().forEach(a=>L.push('! '+a[1])); L.push('Streak '+streak()+' d'); L.push('Theory: '+TOPICS.map(t=>{ const sc = topicScore(t.id); return `${t.id} ${sc.n?Math.round(sc.score)+'%':'-'}(${sc.n})`; }).join(' ')); const m = mockStats(); L.push(`Mocks exam ${m.exam===null?'-':Math.round(m.exam)+'%'} found ${m.found===null?'-':Math.round(m.found)+'%'}`); tests.slice(0,10).forEach(t=>L.push(` ${iso(new Date(t.ts))} ${t.mode} ${t.level||'?'} ${t.score}/${t.total}${t.sub?' '+t.sub:''}`)); L.push('Sub-areas: '+Object.entries(EV.SUB).map(([k,e])=>`${k} ${Math.round(100*e.wr/e.n)}%(${e.n})`).join('; ')); L.push('SR: '+SR_AREAS.map(([n,f])=>{ const sc = srAreaScore(f); return `${n} ${sc?Math.round(sc.score)+'%('+sc.n+')':'-'}`; }).join('; ')); L.push('Aural: '+AURAL.map(a=>{ const sc=auralScore(a.id); return `${a.id} ${sc?Math.round(sc.score)+'%('+sc.n+')':'-'}`; }).join(' ')); L.push('Pieces '+PIECES.map(p=>p.list+':'+(S.pieces[p.id]||0)).join(' ')+' · scales '+Math.round(scalesPct())+'%'); L.push('Log: '+lastDays(14).map(d=>{ const s = dayStat(d); const tm = Object.values((practice[d]||{}).time||{}).reduce((x,y)=>x+y,0); return d.slice(5)+(s?`=${s.dn}/${s.n}`:'=·')+(tm?`/${Math.round(tm/60)}m`:''); }).join(' ')); if (parentNotes&&parentNotes.text) L.push('Parent notes: '+parentNotes.text); const txt = L.join('\n');
   const done = () => { $('#reportStatus').textContent = 'Copied — paste it to Claude'; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(()=>{ $('#reportBox').hidden=false; $('#reportBox').value = txt; }); else { $('#reportBox').hidden=false; $('#reportBox').value = txt; } }
