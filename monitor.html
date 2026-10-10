@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Grade 5 Monitor</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Public+Sans:wght@400;500;600;700&display=swap">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<script src="config.js"></script>
+<style>
+
+/* Layout: one calm "Today" screen first; the syllabus lives behind tabs, each with Claude's evidence-based score per sub-area. Notation is always drawn on cream manuscript paper, whatever the UI theme. */
+:root{
+  --bg:#f5f3ee; --surface:#ffffff; --surface-2:#edeae2; --line:#d8d3c6; --fg:#1d1c19; --muted:#6b675c;
+  --accent:#2b6a53; --accent-ink:#ffffff; --accent-soft:#dcebe3;
+  --paper:#fbf7ec; --ink:#1b1a17; --paper-line:#e2d9c4;
+  --good:#2b6a53; --warn:#b7791f; --bad:#b4433a;
+  --display:"Newsreader",Georgia,"Times New Roman",serif; --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#171714; --surface:#1f1f1b; --surface-2:#2a2a25; --line:#3a3932; --fg:#ebe8df; --muted:#a19d91;
+  --accent:#7fc3a6; --accent-ink:#0f1a15; --accent-soft:#223b31; --good:#7fc3a6; --warn:#e0a84a; --bad:#e2766c; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#171714; --surface:#1f1f1b; --surface-2:#2a2a25; --line:#3a3932; --fg:#ebe8df; --muted:#a19d91;
+  --accent:#7fc3a6; --accent-ink:#0f1a15; --accent-soft:#223b31; --good:#7fc3a6; --warn:#e0a84a; --bad:#e2766c; color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5;margin:0}
+.wrap{max-width:980px;margin:0 auto;padding-inline:16px;padding-block:14px 48px}
+h1,h2,h3{font-family:var(--display);font-weight:500;line-height:1.15;margin:0;text-wrap:balance}
+h1{font-size:30px} h2{font-size:22px} h3{font-size:18px}
+p{margin:0}
+.muted{color:var(--muted)} .small{font-size:13px}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+header.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between;margin-bottom:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;gap:8px;align-items:baseline;padding:6px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:13px}
+.chip b{font-family:var(--display);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}
+nav.tabs button{appearance:none;background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;margin-bottom:-1px}
+nav.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+nav.tabs button.gear{margin-left:auto}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section.view{display:none} section.view.on{display:block}
+.grid{display:grid;gap:14px} .g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))} .g3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.card.flat{background:transparent}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row.between{justify-content:space-between}
+.bar{height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:999px;transition:width .3s}
+.bar.thin{height:5px}
+.pct{font-variant-numeric:tabular-nums;font-weight:600;font-size:13px}
+button.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+button.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.btn.sm{padding:5px 10px;font-size:13px}
+button.btn:disabled{opacity:.5;cursor:default}
+.steps{display:flex;gap:4px}
+.steps button{flex:1;appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:6px;padding:5px 0;font:inherit;font-size:12px;font-weight:600;cursor:pointer;font-variant-numeric:tabular-nums}
+.steps button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:5px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.tag.new{background:var(--accent-soft);color:var(--accent)}
+.tag.good{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.tag.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.tag.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.paper{background:var(--paper);color:var(--ink);border:1px solid var(--paper-line);border-radius:8px;padding:8px 10px;overflow-x:auto}
+.paper svg{display:block;max-width:100%;height:auto;margin:0 auto}
+.paper .alt{font-family:var(--display);font-style:italic;padding:14px 6px;text-align:center}
+details{border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+details summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style:none;display:grid;grid-template-columns:1fr auto auto;gap:6px 12px;align-items:center}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"+";color:var(--muted);font-weight:400;font-size:18px}
+details[open] summary::after{content:"–"}
+details .body{padding:0 16px 16px;display:flex;flex-direction:column;gap:12px}
+.sum-right{display:flex;gap:10px;align-items:center}
+@media (max-width:560px){.sum-right .bar{display:none}}
+ul.facts{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px} ul.facts li{max-width:68ch}
+.opts{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.opts button{appearance:none;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:10px 12px;font:inherit;cursor:pointer}
+.opts button.right{border-color:var(--good);background:color-mix(in srgb,var(--good) 14%,var(--surface))}
+.opts button.wrong{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,var(--surface))}
+.opts button:disabled{cursor:default}
+.explain{border-left:3px solid var(--accent);padding:6px 12px;background:var(--surface-2);border-radius:0 8px 8px 0;max-width:72ch}
+.hist{display:flex;gap:6px;align-items:flex-end;height:64px}
+.hist i{flex:1;max-width:28px;background:var(--accent);border-radius:3px 3px 0 0;position:relative;min-height:2px}
+.hist i.fail{background:var(--warn)} .hist i.found{opacity:.5}
+table{border-collapse:collapse;width:100%;font-size:14px} td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top} th{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.tbl{overflow-x:auto}
+input[type=text],input[type=date],select,input[type=number]{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);min-width:0}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:600}
+.today-item{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
+.today-item:first-of-type{border-top:0}
+.today-item .mins{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1;padding-top:2px;color:var(--accent)}
+.today-item input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);margin-top:2px}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.acts a,.acts button{appearance:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:6px 11px;font:inherit;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}
+.acts a.sec,.acts button.sec{background:var(--surface);color:var(--fg);border-color:var(--line)}
+.vids{display:flex;flex-direction:column;gap:6px}
+.vid{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);text-decoration:none;color:inherit}
+.vid:hover{border-color:var(--accent)}
+.vid .play{width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:11px}
+.vid b{font-weight:600} .vid .meta{font-size:12px;color:var(--muted);white-space:nowrap}
+@media (max-width:480px){.vid{grid-template-columns:auto 1fr}.vid .meta{grid-column:2}}
+.tool{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:8px}
+.linkbtn{appearance:none;background:none;border:0;padding:0;font:inherit;color:var(--fg);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;cursor:pointer;text-align:left}
+.linkbtn:hover{text-decoration-color:var(--accent)}
+.strip{display:grid;grid-template-columns:repeat(14,1fr);gap:4px}
+.strip i{aspect-ratio:1;border-radius:4px;background:var(--surface-2);display:grid;place-items:center;font-style:normal;font-size:10px;color:var(--muted)}
+.strip i.full{background:var(--good);color:#fff}.strip i.part{background:var(--warn);color:#fff}.strip i.missed{background:var(--bad);color:#fff}.strip i.open{outline:2px solid var(--accent);outline-offset:-2px}
+.logrow{display:grid;grid-template-columns:16px 1fr auto;gap:8px;align-items:baseline;font-size:13px}
+.logrow.ok span:first-child{color:var(--good);font-weight:700}.logrow.miss span:first-child{color:var(--bad);font-weight:700}.logrow.miss{color:var(--muted)}
+.lesson{border:1px dashed var(--line);border-radius:8px;padding:10px 12px;background:var(--surface-2)}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+.kpi{font-family:var(--display);font-size:34px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.ring{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.ring .card{padding:12px 14px}
+.score{display:grid;grid-template-columns:1fr auto auto;gap:6px 12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.score:last-child{border-bottom:0}
+.score .bar{grid-column:1/-1}
+.score .n{font-size:12px;color:var(--muted);white-space:nowrap}
+.area{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:480px){h1{font-size:26px} .today-item{grid-template-columns:auto 1fr} .today-item .mins{grid-row:span 2} .score{grid-template-columns:1fr auto} .score .n{grid-column:1}}
+
+.alert{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:14px}
+.alert.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,var(--surface))}
+.alert.warn{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,var(--surface))}
+.alert.good{border-color:var(--good);background:color-mix(in srgb,var(--good) 12%,var(--surface))}
+.chip{display:inline-block;font-size:11px;padding:2px 6px;border-radius:5px;background:var(--surface-2);color:var(--muted);margin:1px 0}
+.chip.good{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}.chip.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}.chip.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+textarea{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);width:100%;min-height:90px}
+html,body{margin:0}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div><div class="eyebrow">ABRSM Grade 5 · Piano</div><h1 id="title">Parent monitor</h1><p class="muted small">Private view · <span id="syncStatus"></span></p></div>
+  <div class="row"><button class="btn sm" id="refresh">Refresh</button><button class="btn sm primary" id="copyReport">Copy report for Claude</button><span class="small muted" id="reportStatus"></span></div>
+</header>
+<div class="card stack" id="keyGate" style="max-width:480px">
+  <h3>Parent key</h3>
+  <div class="row"><input type="text" id="keyInput" placeholder="parent-xxxxx-xxxxx-xxxxx" style="min-width:260px" autocomplete="off"><button class="btn primary" id="keyConnect">Open</button></div>
+  <p class="small muted" id="gateMsg">This page opens only with the parent key. The family key does not work here.</p>
+</div>
+<div id="main" class="stack" hidden>
+  <textarea id="reportBox" hidden style="font:12px ui-monospace,monospace;min-height:160px"></textarea>
+  <div class="ring" id="kpis"></div>
+  <div class="card stack"><div class="eyebrow">Flags</div><div class="stack" style="gap:6px" id="alerts"></div></div>
+  <div class="grid g2">
+    <div class="card stack"><div class="row between"><h3>Consistency</h3></div><div class="strip" id="strip"></div><p class="small muted" id="consistency"></p><div class="eyebrow">Missed items (last 14 days)</div><div class="stack" style="gap:4px" id="missed"></div></div>
+    <div class="card stack"><h3>Theory trend by week</h3><div id="trend"></div><div class="eyebrow" style="margin-top:6px">Full mocks</div><div class="tbl"><table><tbody id="mockRows"></tbody></table></div></div>
+  </div>
+  <div class="card stack"><h3>Theory targets · Claude’s score</h3><div class="tbl"><table><thead><tr><th>Target</th><th style="min-width:140px">Score</th><th>Status</th><th>Sub-areas</th></tr></thead><tbody id="theoryRows"></tbody></table></div></div>
+  <div class="grid g2">
+    <div class="card stack"><h3>Practical</h3><div id="pracRows"></div></div>
+    <div class="stack">
+      <div class="card stack"><h3>Checkpoints</h3><div class="stack" style="gap:4px" id="checkpoints"></div></div>
+      <div class="card stack"><h3>For the next lesson</h3><ul class="facts" id="brief"></ul></div>
+    </div>
+  </div>
+  <div class="card stack"><div class="row between"><h3>Your notes (private)</h3><span class="small muted" id="notesStatus"></span></div><textarea id="parentNotes" placeholder="Observations, what the teacher said, decisions…"></textarea><div class="row"><button class="btn sm" id="saveNotes">Save notes</button></div></div>
+</div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* ---------- Syllabus content (fixed) ---------- */
+const TOPICS = [
+  {id:'t1', name:'Keys & scales up to 6 sharps/flats', g3:'up to 4♯/♭ (G3 book p6, p17)', g4:'5♯/♭', g5:'6♯/♭: F♯, G♭ majors; D♯, E♭ minors',
+   subs:['Major key signatures','Minor key signatures','Harmonic & melodic minor scales (book)','Enharmonic keys F♯/G♭, D♯/E♭ (book)'],
+   facts:['Sharps go F C G D A E B; flats go B E A D G C F (the reverse).','Relative minor = a minor 3rd below the major tonic (shares the key signature).','Harmonic minor raises the 7th; melodic minor raises 6th and 7th going up, lowers them coming down.','Enharmonic pairs at Grade 5: F♯ = G♭ major, D♯ = E♭ minor.'],
+   stave:{clef:'treble', key:'F#', alt:'F♯ major: six sharps'}, caption:'F♯ major (six sharps). Its relative minor is D♯ minor.'},
+  {id:'t2', name:'All four clefs (tenor is new)', g3:'treble & bass only', g4:'alto clef', g5:'tenor clef', isNew:true,
+   subs:['Treble clef','Bass clef','Alto clef','Tenor clef','Rewriting at the same pitch / at the octave (book)'],
+   facts:['Alto clef: middle C on the middle (3rd) line — viola.','Tenor clef: middle C on the 4th line — higher cello, bassoon, trombone parts.','Rewriting a note in another clef keeps the SAME pitch; count from middle C.','Transposing at the octave between clefs is a common question.'],
+   stave:{clef:'tenor', notes:[{keys:['c/4'],dur:'w'}], alt:'tenor clef with middle C on the 4th line'}, caption:'Middle C in the tenor clef sits on the 4th line.'},
+  {id:'t3', name:'Time signatures, grouping & irregular divisions', g3:'compound time, grouping, demisemiquavers', g4:'further compound, duplets/triplets', g5:'irregular: 5/4, 5/8, 7/4, 7/8; quintuplets, sextuplets', isNew:true,
+   subs:['Simple time & grouping','Compound time & grouping','Irregular time signatures','Irregular divisions (tuplets)','Rests and bar-lines in all of the above (book)'],
+   facts:['Simple time: beats divide in 2. Compound: beats divide in 3 (6/8, 9/8, 12/8).','Irregular time (5 or 7) groups beats as 2+3 / 3+2 or 2+2+3 etc. — beaming shows the grouping.','Rests fill beats exactly: never hide a beat with one long rest across the middle of a 4/4 bar.','Duplet = 3 of the value; triplet = 2; quintuplet and sextuplet = 4.'],
+   stave:{clef:'treble', time:'7/8', notes:[{keys:['g/4'],dur:'8'},{keys:['a/4'],dur:'8'},{keys:['b/4'],dur:'8'},{keys:['c/5'],dur:'8'},{keys:['d/5'],dur:'8'},{keys:['c/5'],dur:'8'},{keys:['b/4'],dur:'8'}], beams:[[0,1],[2,3],[4,6]], alt:'7/8 bar beamed 2+2+3'}, caption:'7/8 grouped 2+2+3 — the beams tell the player the grouping.'},
+  {id:'t4', name:'Chromatic scales', g3:'—', g4:'introduced', g5:'write / identify from any note',
+   subs:['Chromatic scale spelling','Writing a chromatic scale with correct accidentals (book)'],
+   facts:['Twelve semitones per octave; written as 13 notes including the octave.','Ascending: use sharps for raised notes; descending: use flats — never write the same letter three times in a row.','Common exam task: spot the wrongly-spelt note in a given chromatic scale.'],
+   stave:{clef:'treble', notes:[{keys:['c/4'],dur:'8'},{keys:['c#/4'],dur:'8',acc:['#']},{keys:['d/4'],dur:'8'},{keys:['d#/4'],dur:'8',acc:['#']},{keys:['e/4'],dur:'8'},{keys:['f/4'],dur:'8'},{keys:['f#/4'],dur:'8',acc:['#']},{keys:['g/4'],dur:'8'}], alt:'chromatic scale rising from C'}, caption:'Chromatic scale rising from C, spelt with sharps.'},
+  {id:'t5', name:'Intervals by number & quality, incl. compound', g3:'number only (p30)', g4:'quality: major, minor, perfect; aug/dim', g5:'compound (beyond an octave)', isNew:true,
+   subs:['Simple intervals (major/minor/perfect)','Augmented & diminished','Compound intervals','Writing a named interval above a given note (book)'],
+   facts:['Number: count letter names inclusively (C→E = 3rd).','Quality: 4ths, 5ths, octaves are perfect; 2nds, 3rds, 6ths, 7ths are major/minor. One semitone bigger = augmented; smaller = minor → diminished.','Compound = simple interval + 7 (a major 10th is a major 3rd plus an octave).','Check against the major scale of the LOWER note: if the upper note is in it, the interval is major or perfect.'],
+   stave:{clef:'treble', notes:[{keys:['e/4','g/5'],dur:'w'}], alt:'E4 to G5, a minor 10th'}, caption:'E up to G an octave higher: a minor 10th (compound minor 3rd).'},
+  {id:'t6', name:'Scale degrees & technical names', g3:'—', g4:'introduced', g5:'in all keys set',
+   subs:['Note → technical name','Name → note'],
+   facts:['1 tonic · 2 supertonic · 3 mediant · 4 subdominant · 5 dominant · 6 submediant · 7 leading note.','Dominant is a 5th ABOVE the tonic; subdominant a 5th BELOW it (and a 4th above).','In minor keys the leading note is the raised 7th (harmonic minor).'],
+   stave:{clef:'treble', key:'Eb', notes:[{keys:['eb/4'],dur:'q'},{keys:['f/4'],dur:'q'},{keys:['g/4'],dur:'q'},{keys:['ab/4'],dur:'q'},{keys:['bb/4'],dur:'q'},{keys:['c/5'],dur:'q'},{keys:['d/5'],dur:'q'},{keys:['eb/5'],dur:'q'}], alt:'E♭ major scale'}, caption:'E♭ major: tonic E♭, dominant B♭, submediant C, leading note D.'},
+  {id:'t7', name:'Chords I, II, IV, V + inversions; cadences', g3:'—', g4:'I, IV, V root position; perfect & imperfect cadences', g5:'chord II; 1st & 2nd inversions (b, c); plagal cadence', isNew:true,
+   subs:['Chords in root position','Inversions (b, c)','Cadences','Choosing chords at cadence points in a melody (book)'],
+   facts:['Label = Roman numeral + a/b/c: a root position, b first inversion (3rd in bass), c second inversion (5th in bass).','Perfect cadence V–I. Plagal IV–I. Imperfect: anything (usually I, II or IV) → V. Interrupted (V–VI) is Grade 6.','Chord II in a major key is minor (D–F–A in C major).','Cadence questions at Grade 5 are in C, G, D or F major; Ic–V–I is the classic approach to a perfect cadence.'],
+   stave:{clef:'treble', key:'G', notes:[{keys:['g/4','b/4','d/5'],dur:'h'},{keys:['a/4','c/5','e/5'],dur:'h'},{keys:['c/5','e/5','g/5'],dur:'h'},{keys:['d/5','f#/5','a/5'],dur:'h'}], alt:'chords I, II, IV, V in G major'}, caption:'G major: I (G B D), II (A C E), IV (C E G), V (D F♯ A), all in root position.'},
+  {id:'t8', name:'Transposition & transposing instruments', g3:'at the octave (p10)', g4:'by other intervals', g5:'instruments in B♭, A, F: written ↔ concert pitch', isNew:true,
+   subs:['Transposing a melody','Transposing instruments','Rewriting a passage at a given interval with accidentals (book)'],
+   facts:['B♭ instruments (clarinet, trumpet) sound a major 2nd LOWER than written. A clarinet sounds a minor 3rd lower. F instruments (horn, cor anglais) sound a perfect 5th lower.','To write a part: transpose the concert pitch UP by that interval (and change the key signature to match).','Keep every accidental the same distance from its new key signature — count intervals, don’t just move noteheads.'],
+   stave:{clef:'treble', key:'D', notes:[{keys:['d/5'],dur:'q'},{keys:['e/5'],dur:'q'},{keys:['f#/5'],dur:'h'}], alt:'written D major for a B♭ clarinet, sounding C major'}, caption:'Written for clarinet in B♭ in D major → sounds a major 2nd lower, in C major.'},
+  {id:'t9', name:'Ornaments', g3:'—', g4:'—', g5:'recognise trill, mordents, turn, acciaccatura, appoggiatura; replace written-out ornaments with the sign', isNew:true,
+   subs:['Trill, mordents, turn','Grace notes (acciaccatura/appoggiatura)','Replacing a written-out ornament with its sign (book)'],
+   facts:['Trill (tr): rapid alternation with the note above.','Upper mordent (no line): note, note above, note. Lower mordent (line through it): note, note below, note.','Turn: note above, note, note below, note. An inverted turn goes the other way.','Acciaccatura: grace note with a stroke, as fast as possible. Appoggiatura: no stroke, takes half (or two-thirds) of the main note.'],
+   stave:{clef:'treble', notes:[{keys:['g/4'],dur:'q',orn:'tr'},{keys:['g/4'],dur:'q',orn:'mordent'},{keys:['g/4'],dur:'q',orn:'mordent_inverted'},{keys:['g/4'],dur:'q',orn:'turn'}], alt:'trill, upper mordent, lower mordent, turn'}, caption:'Left to right: trill, upper mordent, lower mordent, turn.'},
+  {id:'t10', name:'Voices & instruments', g3:'—', g4:'—', g5:'voice types; orchestral families, clefs, sound production; transposing instruments', isNew:true,
+   subs:['Instrument families & sound','Clefs & transposing instruments','Voices'],
+   facts:['Voices high → low: soprano, mezzo-soprano, alto (contralto), tenor, baritone, bass.','Woodwind: flute/piccolo (no reed), oboe/cor anglais/bassoon (double reed), clarinet/sax (single reed). Brass: lips buzzing in a cup mouthpiece.','Clefs: viola = alto; cello & bassoon = bass (tenor for high passages); double bass sounds an octave lower; piccolo an octave higher.','Definite-pitch percussion: timpani, xylophone, marimba, glockenspiel, vibraphone, tubular bells, celesta. Indefinite: snare, bass drum, cymbals, triangle, tambourine, castanets, tam-tam.'],
+   caption:''},
+  {id:'t11', name:'Terms, signs & music in context', g3:'performance directions (p36)', g4:'more terms', g5:'more terms incl. French & German; score-based questions',
+   subs:['Italian terms','French & German terms','Signs & symbols: 8va, pedal, accents, pause, segno, coda (book)','Music in context: questions on a printed score (practice papers)'],
+   facts:['Grade 5 adds French (vite, lent, cédez, en dehors) and German (langsam, schnell, mäßig, lebhaft, ruhig) terms to the Italian list.','“Music in context” questions take a short printed score and ask you to apply everything above: name intervals, chords, keys, instruments, terms, and the clef.','Know the score vocabulary: 8va, 8vb, loco, M.M., pedal marks, hairpins, accents, pause, segno, coda.'],
+   caption:''}
+];
+const PIECES = [
+  {id:'a3', list:'A3', title:'Rondo (3rd movt from Sonatina in F, Op. 168 No. 1)', composer:'Diabelli'},
+  {id:'b1', list:'B1', title:'Étude in C (from 25 études faciles, Op. 50 No. 1)', composer:'Farrenc'},
+  {id:'c3', list:'C3', title:'The Witch (from The Secret Garden)', composer:'Jakub Metelka'}
+];
+const PIECE_STAGES = ['Not started','Notes learnt (hands separately)','Hands together, slowly','Up to tempo','Memorised & secure','Performance ready'];
+const SCALE_GROUPS = [
+  {name:'Scales, similar motion — hands together, legato, 2 octaves', items:[['sa','A major'],['se','E major'],['sb','B major'],['sfs','F♯ major'],['sdb','D♭ major'],['sfsm','F♯ minor (harmonic or melodic)'],['scsm','C♯ minor (harmonic or melodic)'],['sgsm','G♯ minor (harmonic or melodic)'],['sebm','E♭ minor (harmonic or melodic)'],['sbbm','B♭ minor (harmonic or melodic)']]},
+  {name:'Staccato scales — hands separately, 2 octaves', items:[['stab','A♭ major'],['stfm','F minor (harmonic or melodic)']]},
+  {name:'Contrary-motion scales — 2 octaves, both hands start on the tonic', items:[['cmdb','D♭ major'],['cmcsm','C♯ harmonic minor']]},
+  {name:'Chromatic contrary-motion — 2 octaves, hands a major 3rd apart', items:[['chr','LH starts F♯ · RH starts A♯']]},
+  {name:'Arpeggios — root position, hands together, legato, 2 octaves', items:[['aa','A major'],['ae','E major'],['ab','B major'],['afs','F♯ major'],['aab','A♭ major'],['adb','D♭ major'],['afsm','F♯ minor'],['acsm','C♯ minor'],['agsm','G♯ minor'],['aebm','E♭ minor'],['afm','F minor'],['abbm','B♭ minor']]},
+  {name:'Diminished seventh — hands separately, 2 octaves', items:[['dim7','Starting on B']]}
+];
+const SCALE_STAGES = ['Not started','Learning (with the book)','From memory, under tempo','Secure at tempo'];
+const AURAL = [
+  {id:'A', name:'A · Sing/play back a melody', desc:'Played twice; up to 3 sharps/flats; starts on a note of the tonic chord; up to 4 bars.'},
+  {id:'B', name:'B · Sing six notes from score', desc:'Free time; major key up to 2 sharps/flats; range a 5th above to a 4th below the tonic; starts and ends on the tonic.'},
+  {id:'C', name:'C · Two features of a piece', desc:'Examiner names two of: dynamics, articulation, tempo change, tonality, character, style & period.'},
+  {id:'D', name:'D · Clap the rhythm, name the time', desc:'Clap back an extract (up to 6 bars) from the same piece; say whether it is in 2, 3 or 4 time.'}
+];
+const TOPIC_WEIGHT = {t1:1,t2:1.2,t3:1.2,t4:.6,t5:1.3,t6:.8,t7:1.3,t8:1,t9:.8,t10:1,t11:1.2};
+const FOUND_CAP = 0.65;
+
+/* ---------- State ---------- */
+const DEFAULT = {
+  seed: Object.fromEntries(TOPICS.map(t=>[t.id,0])),
+  pieces: Object.fromEntries(PIECES.map(p=>[p.id,0])),
+  scales: {}, covered: {},
+  settings:{name:'', theoryDate:'2026-11-30', pracDate:'2027-04-01', mins:50, level:'foundation', lesson1:'2 × 30 min a week (theory + practical)', lesson2:'1 × 60 min a week (practical)'}
+};
+let S = JSON.parse(JSON.stringify(DEFAULT));
+let tests = []; let logs = {}; let videos = {}; let practice = {}; let todayFrozen = false;
+let db = null; let storeKind = 'memory';
+const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } };
+const lsSet = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+const pending = {}; const inflight = {};
+function persist(path, data) {
+  lsSet('g5:'+path, data); if (!db) return;
+  pending[path] = data; if (inflight[path]) return;
+  const flush = () => { const d = pending[path]; delete pending[path]; if (d===undefined) { inflight[path]=false; return; }
+    inflight[path] = true; db.doc(path).set(d).catch(e=>{ toast('Could not save (' + (e.code||'error') + ')'); }).finally(()=>{ inflight[path]=false; if (pending[path]!==undefined) setTimeout(flush, 0); }); };
+  clearTimeout(inflight[path+':t']); inflight[path+':t'] = setTimeout(flush, 500);
+}
+const saveState = () => persist('state/main', S);
+function merge(base, over) { const out = {...base}; for (const k in over) { if (over[k] && typeof over[k]==='object' && !Array.isArray(over[k]) && base[k] && typeof base[k]==='object') out[k] = merge(base[k], over[k]); else out[k] = over[k]; } return out; }
+function migrate(st){ if (st.theory && !st.seedMigrated) { st.seed = merge(st.seed||{}, st.theory); st.seedMigrated = true; } return st; }
+async function boot() {
+  const local = lsGet('g5:state/main'); if (local) S = migrate(merge(S, local));
+  const lt = lsGet('g5:tests'); if (lt) tests = lt; const ll = lsGet('g5:logs'); if (ll) logs = ll; const lv = lsGet('g5:videos'); if (lv) videos = lv; const lp = lsGet('g5:practice'); if (lp) practice = lp;
+  renderAll();
+  try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch(e){ db = null; }
+  if (!db) { storeKind = 'local'; $('#storeNote').textContent = 'Saved in this browser only.'; return; }
+  storeKind = 'db'; $('#storeNote').textContent = 'Saved to the shared store.';
+  db.doc('state/main').onSnapshot(snap => { if (snap.exists) { S = migrate(merge(JSON.parse(JSON.stringify(DEFAULT)), snap.data())); renderAll(); } }, e => toast('Store error: ' + e.code));
+  db.collection('tests').orderBy('ts','desc').limit(80).onSnapshot(snap => { tests = snap.docs.map(d=>({id:d.id, ...d.data()})); EV = evidence(); renderTestsHome(); renderTheory(); renderToday(); }, ()=>{});
+  db.collection('resources').onSnapshot(snap => { videos = {}; snap.docs.forEach(d=>{ videos[d.id] = d.data(); }); lsSet('g5:videos', videos); renderVideos(); renderToday(); }, ()=>{});
+  db.collection('practice').orderBy('date','desc').limit(60).onSnapshot(snap => { practice = {}; snap.docs.forEach(d=>{ practice[d.id] = d.data(); }); renderPracticeStats(); renderToday(); }, ()=>{});
+  db.collection('log').orderBy('date','desc').limit(90).onSnapshot(snap => { logs = {}; snap.docs.forEach(d=>{ logs[d.id] = d.data(); }); renderLog(); renderToday(); }, ()=>{});
+}
+
+/* ---------- Notation ---------- */
+const getVF = () => (window.Vex && window.Vex.Flow) || window.VexFlow || null;
+function drawStave(el, spec) {
+  if (!el) return; el.innerHTML = ''; el.hidden = false; const VF = getVF();
+  const fallback = () => { el.innerHTML = '<div class="alt">' + esc(spec.alt || 'notation') + '</div>'; };
+  if (!VF) return fallback();
+  try {
+    const W = spec.width || 360, H = spec.height || (spec.notes && spec.notes.some(n=>n.label) ? 150 : 120);
+    const r = new VF.Renderer(el, VF.Renderer.Backends.SVG); r.resize(W, H); const ctx = r.getContext();
+    const stave = new VF.Stave(6, 10, W - 12);
+    if (spec.clef) stave.addClef(spec.clef); if (spec.key) stave.addKeySignature(spec.key); if (spec.time) stave.addTimeSignature(spec.time);
+    if (spec.barline && VF.Barline) stave.setEndBarType(VF.Barline.type.END);
+    stave.setContext(ctx).draw();
+    if (spec.notes && spec.notes.length) {
+      const notes = spec.notes.map(n => {
+        const sn = new VF.StaveNote({ keys: n.keys, duration: n.dur, clef: spec.clef || 'treble', auto_stem: true });
+        (n.acc || []).forEach((a, i) => { if (a) sn.addModifier(new VF.Accidental(a), i); });
+        if (n.dur.endsWith('d') && VF.Dot && VF.Dot.buildAndAttach) VF.Dot.buildAndAttach([sn], { all: true });
+        if (n.orn) sn.addModifier(new VF.Ornament(n.orn), 0);
+        if (n.grace) { const gn = new VF.GraceNote({ keys: n.grace.keys, duration: '8', slash: !!n.grace.slash, clef: spec.clef || 'treble' }); const gg = new VF.GraceNoteGroup([gn], true); sn.addModifier(gg.beamNotes(), 0); }
+        if (n.label) { try { const an = new VF.Annotation(n.label); if (an.setVerticalJustification) an.setVerticalJustification(VF.Annotation.VerticalJustify.BOTTOM); if (an.setFont) an.setFont('Public Sans', 10, ''); sn.addModifier(an, 0); } catch(e){} }
+        if (n.color === 'hi') { try { sn.setStyle({ fillStyle: '#b4433a', strokeStyle: '#b4433a' }); } catch(e){} }
+        return sn;
+      });
+      const beams = (spec.beams || []).map(([a, b]) => new VF.Beam(notes.slice(a, b + 1)));
+      VF.Formatter.FormatAndDraw(ctx, stave, notes, { auto_beam: false });
+      beams.forEach(b => b.setContext(ctx).draw());
+    }
+    const svg = el.querySelector('svg'); if (svg) { svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.width = Math.min(W, 420) + 'px'; }
+  } catch (e) { console.warn('notation failed', e); fallback(); }
+}
+let vfTries = 0; function whenVF(fn) { if (getVF() || vfTries > 24) fn(); else { vfTries++; setTimeout(() => whenVF(fn), 150); } }
+
+/* ---------- Claude's scoring ---------- */
+const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+const daysTo = iso => Math.ceil((new Date(iso+'T00:00:00') - new Date(new Date().toDateString()))/86400000);
+const todayISO = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const RECENT = 30*86400000;
+function recentTests(){ const cut = Date.now()-RECENT; return tests.filter(t=>t.ts>=cut).slice(0,40); }
+function evidence(){
+  const T = {}, SUB = {};
+  recentTests().forEach(t => { const w = t.level==='exam' ? 1 : FOUND_CAP;
+    Object.entries(t.byTopic||{}).forEach(([k,v])=>{ const e = T[k] = T[k] || {wr:0,n:0,nx:0,r:0}; e.wr += v.r*w; e.n += v.n; e.r += v.r; if (t.level==='exam') e.nx += v.n; });
+    Object.entries(t.bySub||{}).forEach(([k,v])=>{ const e = SUB[k] = SUB[k] || {wr:0,n:0,nx:0,r:0}; e.wr += v.r*w; e.n += v.n; e.r += v.r; if (t.level==='exam') e.nx += v.n; }); });
+  return {T, SUB};
+}
+let EV = {T:{}, SUB:{}};
+function topicScore(id){ const e = EV.T[id]; const seed = Number(S.seed[id]||0); if (!e || !e.n) return {score: seed*0.6, n:0, nx:0, basis:'seed'};
+  const ev = 100*e.wr/e.n; const k = Math.min(1, e.n/8); return {score: ev*k + seed*0.6*(1-k), n:e.n, nx:e.nx, acc: e.r/e.n, basis: k<1?'mixed':'evidence'}; }
+function subScore(name){ const e = EV.SUB[name]; if (!e || !e.n) return null; return {score:100*e.wr/e.n, n:e.n, nx:e.nx, acc:e.r/e.n}; }
+function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; if (sc.score < 45) return ['Needs work','bad']; if (sc.score < 75) return ['Developing','warn']; if (sc.nx < 6) return ['Secure at foundation','warn']; return ['Secure','good']; }
+function theoryPct(){ let w=0,s=0; TOPICS.forEach(t=>{ w+=TOPIC_WEIGHT[t.id]; s+=TOPIC_WEIGHT[t.id]*topicScore(t.id).score; }); return w?s/w:0; }
+function mockStats(){ const ex = tests.filter(t=>t.mode==='mock'&&t.level==='exam').slice(0,3), fo = tests.filter(t=>t.mode==='mock'&&t.level!=='exam').slice(0,3); return { exam: ex.length?avg(ex.map(t=>100*t.score/t.total)):null, found: fo.length?avg(fo.map(t=>100*t.score/t.total)):null, nExam: ex.length }; }
+function theoryReadiness(){ const m = mockStats(); const tp = theoryPct(); return m.exam===null ? tp*0.9 : tp*0.5 + m.exam*0.5; }
+function piecesPct(){ return avg(PIECES.map(p=>100*(S.pieces[p.id]||0)/(PIECE_STAGES.length-1))); }
+function scalesPct(){ const all = SCALE_GROUPS.flatMap(g=>g.items.map(i=>i[0])); return avg(all.map(id=>100*(S.scales[id]||0)/3)); }
+function srEntries(){ return Object.values(practice).flatMap(p=>(p.sr||[]).filter(x=>x && typeof x==='object')).sort((a,b)=>b.ts-a.ts).slice(0,40); }
+function srAreaScore(filter){ const es = srEntries().filter(filter); if (!es.length) return null; const sc = avg(es.map(e=> (e.r/4)*100*(e.level==='exam'?1:FOUND_CAP))); return {score:sc, n:es.length, nx:es.filter(e=>e.level==='exam').length}; }
+const SR_AREAS = [
+  ['Simple time (2/4, 3/4, 4/4)', e=>e.time!=='6/8'], ['Compound time (6/8)', e=>e.time==='6/8'],
+  ['Major keys', e=>/major/.test(e.key||'')], ['Minor keys', e=>/minor/.test(e.key||'')],
+  ['Keys with 3+ sharps or flats', e=>/A major|E major|E♭|A♭|F♯ minor|C minor/.test(e.key||'')], ['Grade 5-level pieces', e=>e.level==='exam']
+];
+function srPct(){ const s = srAreaScore(()=>true); return s ? s.score : 0; }
+function auralScore(test){ let n=0, ok=0; Object.values(practice).forEach(p=>{ const v = (p.aural||{})[test]; if (v && typeof v==='object') { n+=v.n; ok+=v.ok; } }); return n ? {score:100*ok/n, n} : null; }
+function auralPct(){ const ss = AURAL.map(a=>auralScore(a.id)).filter(Boolean); return ss.length ? avg(ss.map(s=>s.score)) * (ss.length/4) : 0; }
+function practicalReadiness(){ return (piecesPct()*90 + scalesPct()*21 + srPct()*21 + auralPct()*18)/150; }
+function weakWeights(){ const w = {}; TOPICS.forEach(t=>{ w[t.id] = topicScore(t.id).score; }); return w; }
+
+
+</script>
+<script>
+/* ===================== Parent monitor ===================== */
+const SYNC = { url: (typeof G5_SYNC_URL !== 'undefined' ? G5_SYNC_URL : ''), key: '', lastNow: 0, timer: null, busy: false };
+let parentNotes = null;
+const lsGetM = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } };
+const lsSetM = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+async function rpc(body){ const r = await fetch(SYNC.url, { method:'POST', body: JSON.stringify({ key: SYNC.key, ...body }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error || 'sync error'); return j; }
+function applyDocs(docs){ Object.entries(docs).forEach(([path, data]) => { if (!data || typeof data !== 'object') return; const [col, id] = path.split('/');
+  if (path === 'state/main') S = migrate(merge(JSON.parse(JSON.stringify(DEFAULT)), data));
+  else if (col === 'tests') { const i = tests.findIndex(t=>t.id===id); const rec = {id, ...data}; if (i>=0) tests[i] = rec; else tests.push(rec); }
+  else if (col === 'log') logs[id] = data; else if (col === 'practice') practice[id] = data; else if (col === 'resources') videos[id] = data;
+  else if (path === 'parent/notes') parentNotes = data; }); tests.sort((a,b)=>b.ts-a.ts); }
+async function pull(initial){ if (SYNC.busy) return; SYNC.busy = true; try { const j = await rpc({ op:'list', since: initial ? 0 : Math.max(0, SYNC.lastNow - 5000) }); applyDocs(j.docs||{}); SYNC.lastNow = Math.max(SYNC.lastNow, Number(j.now||0)); EV = evidence(); render(); $('#syncStatus').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); } catch(e){ $('#syncStatus').textContent = 'Could not reach the sync service'; } finally { SYNC.busy = false; } }
+async function connect(k){ SYNC.key = k.trim(); try { const j = await rpc({ op:'whoami' }); if (j.role !== 'parent') { $('#gateMsg').textContent = 'That is not the parent key.'; SYNC.key=''; return; } lsSetM('g5:parentKey', SYNC.key); $('#keyGate').hidden = true; $('#main').hidden = false; await pull(true); clearInterval(SYNC.timer); SYNC.timer = setInterval(()=>pull(false), 60000); document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) pull(false); }); } catch(e){ $('#gateMsg').textContent = 'Key not accepted.'; SYNC.key=''; } }
+
+/* ---------- analysis ---------- */
+const iso = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+function dayStat(d){ const v = logs[d]; if (!v || !Array.isArray(v.plan) || !v.plan.length) return null; const done = new Set(v.done||[]); const pm = v.plan.reduce((s,it)=>s+(it.m||0),0); const dm = v.plan.filter(it=>done.has(it.k)).reduce((s,it)=>s+(it.m||0),0); return {pm, dm, n:v.plan.length, dn: v.plan.filter(it=>done.has(it.k)).length, missed: v.plan.filter(it=>!done.has(it.k)).map(it=>it.t)}; }
+function lastDays(n){ const out=[]; for (let i=n-1;i>=0;i--){ const dt=new Date(); dt.setDate(dt.getDate()-i); out.push(iso(dt)); } return out; }
+function activityOn(d){ const s = dayStat(d); const t = tests.some(x=>iso(new Date(x.ts))===d); const p = practice[d] && ((practice[d].sr||[]).length || Object.keys(practice[d].aural||{}).length); return (s && s.dn>0) || t || !!p; }
+function streak(){ let n=0; const days = lastDays(60).reverse(); for (const d of days) { if (activityOn(d)) n++; else if (d !== iso(new Date())) break; } return n; }
+function weeklyTrend(){ // theory score per ISO week from tests
+  const weeks = {}; tests.forEach(t=>{ const d = new Date(t.ts); const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay()+6)%7)); const w = iso(monday); const e = weeks[w] = weeks[w] || {r:0,n:0,wr:0, mocks:[]}; const wt = t.level==='exam'?1:FOUND_CAP; e.r += t.score; e.n += t.total; e.wr += t.score*wt; if (t.mode==='mock') e.mocks.push(Math.round(100*t.score/t.total) + (t.level==='exam'?'':'ᶠ')); });
+  return Object.entries(weeks).sort((a,b)=>a[0].localeCompare(b[0])).slice(-8).map(([w,e])=>({week:w, score:e.n?Math.round(100*e.wr/e.n):null, n:e.n, mocks:e.mocks})); }
+function alerts(){
+  const A = []; const today = iso(new Date()); const d14 = lastDays(14); const stats = d14.map(d=>dayStat(d)).filter(Boolean);
+  const idle = activityOn(today) ? 0 : (()=>{ let n=0; for (const d of lastDays(14).reverse()) { if (d===today) continue; if (activityOn(d)) break; n++; } return n; })();
+  if (idle >= 2) A.push(['bad', `No practice logged for ${idle} days.`]);
+  const missedMin = stats.reduce((a,s)=>a+(s.pm-s.dm),0), plannedMin = stats.reduce((a,s)=>a+s.pm,0);
+  if (plannedMin && missedMin/plannedMin > 0.4) A.push(['warn', `Only ${Math.round(100*(plannedMin-missedMin)/plannedMin)}% of planned minutes done in the last 14 days.`]);
+  const m = mockStats(); if (m.exam!==null && m.exam < 67) A.push(['warn', `Exam-level mocks averaging ${Math.round(m.exam)}% — pass line is 67%.`]);
+  const dT = daysTo(S.settings.theoryDate); if (dT <= 21 && (m.exam===null || m.exam < 60)) A.push(['bad', `${dT} days to the theory date with ${m.exam===null?'no exam-level mock yet':'mocks under 60%'} — consider booking the following month.`]);
+  const weak = TOPICS.map(t=>({t, sc: topicScore(t.id)})).filter(x=>x.sc.n>=4 && x.sc.score<45); if (weak.length) A.push(['warn', 'Needs work: ' + weak.map(x=>x.t.name).join('; ')]);
+  const notDrilled = TOPICS.filter(t=>!(EV.T[t.id]&&EV.T[t.id].n)); if (notDrilled.length>=4) A.push(['', `${notDrilled.length} theory targets have never been drilled: ${notDrilled.map(t=>t.name.split(' ')[0]+'…').join(', ')}`]);
+  const pcs = PIECES.filter(p=>(S.pieces[p.id]||0)<3); const dP = daysTo(S.settings.pracDate); if (dP < 120 && pcs.length) A.push(['warn', `${pcs.length} piece${pcs.length>1?'s':''} not yet up to tempo with ${dP} days to the practical.`]);
+  if (daysTo('2027-01-31') <= 0 && pcs.length) A.push(['bad', 'Checkpoint 31 Jan passed: pieces not all at stage 3 — the practical should move to the following session.']);
+  const srw = srEntries().filter(e=>Date.now()-e.ts < 7*86400000).length; if (srw===0) A.push(['', 'No sight-reading pieces this week.']);
+  const auw = Object.values(practice).filter(p=>Date.now()-new Date(p.date+'T00:00:00') < 7*86400000).some(p=>Object.keys(p.aural||{}).length); if (!auw) A.push(['', 'No aural trainer rounds this week.']);
+  if (!A.length) A.push(['good', 'Nothing to flag — plan being followed and scores moving.']);
+  return A;
+}
+function teacherBrief(){
+  const L = []; const weak = TOPICS.map(t=>({t, sc: topicScore(t.id)})).filter(x=>x.sc.n>=4).sort((a,b)=>a.sc.score-b.sc.score).slice(0,3);
+  weak.forEach(x=>{ const subs = x.t.subs.map(s=>({s, ss: subScore(s)})).filter(y=>y.ss && y.ss.score<60).map(y=>y.s.replace(/ \(book\)|\(practice papers\)/,'')); L.push(`${x.t.name} (${Math.round(x.sc.score)}%)${subs.length?': '+subs.join(', '):''}`); });
+  const covered = TOPICS.flatMap(t=>t.subs.filter(s=>/\(book\)|\(practice papers\)/.test(s)).map(s=>({t, s:s.replace(/ \((book|practice papers)\)/,'')}))).filter(x=>!S.covered[x.t.id+'|'+x.s]);
+  if (covered.length) L.push('Written work still to cover with teacher: ' + covered.slice(0,5).map(x=>x.s).join('; ') + (covered.length>5?` (+${covered.length-5} more)`:''));
+  const ab = ['A','B','D'].map(k=>({k, sc:auralScore(k)})).filter(x=>x.sc && x.sc.score<70); if (ab.length) L.push('Aural tests to do live in the lesson: ' + ab.map(x=>x.k).join(', '));
+  const pc = PIECES.slice().sort((a,b)=>(S.pieces[a.id]||0)-(S.pieces[b.id]||0))[0]; L.push(`Piece furthest behind: ${pc.list} ${pc.composer} (stage ${S.pieces[pc.id]||0} — ${PIECE_STAGES[S.pieces[pc.id]||0]})`);
+  return L;
+}
+
+/* ---------- render ---------- */
+function bar(v, cls){ return `<div class="bar thin"><i class="${cls||''}" style="width:${Math.max(0,Math.min(100,Math.round(v)))}%"></i></div>`; }
+function render(){
+  const name = S.settings.name || 'Student'; $('#title').textContent = name + ' · parent monitor';
+  const m = mockStats(); const tr = theoryReadiness(), pr = practicalReadiness();
+  $('#kpis').innerHTML = [['Theory readiness', Math.round(tr)+'%', `${daysTo(S.settings.theoryDate)} days to exam`],['Practical readiness', Math.round(pr)+'%', `${daysTo(S.settings.pracDate)} days to exam`],['Exam-level mocks', m.exam===null?'–':Math.round(m.exam)+'%', m.exam===null?'none yet':'pass line 67%'],['Practice streak', streak()+' d', 'consecutive days with activity']].map(([k,v,s])=>`<div class="card"><div class="eyebrow">${k}</div><div class="kpi">${v}</div><div class="small muted">${s}</div></div>`).join('');
+  $('#alerts').innerHTML = alerts().map(([c,t])=>`<div class="alert ${c}">${esc(t)}</div>`).join('');
+  // consistency
+  const days = lastDays(28); const today = iso(new Date());
+  $('#strip').innerHTML = days.map(d=>{ const s = dayStat(d); const act = activityOn(d); const cls = !s ? (act?'part':'none') : s.dn===s.n?'full': s.dn>0?'part': d===today?'open':'missed'; return `<i class="${cls}" title="${d}${s?`: ${s.dn}/${s.n} items, ${s.dm}/${s.pm} min`:act?': activity, no plan opened':': nothing'}"><b>${Number(d.slice(-2))}</b></i>`; }).join('');
+  const st14 = lastDays(14).map(d=>dayStat(d)).filter(Boolean); const pm = st14.reduce((a,s)=>a+s.pm,0), dm = st14.reduce((a,s)=>a+s.dm,0);
+  $('#consistency').textContent = st14.length ? `Last 14 days: ${st14.filter(s=>s.dn===s.n).length} days fully done, ${st14.filter(s=>s.dn===0).length} planned but untouched, ${dm}/${pm} minutes (${pm?Math.round(100*dm/pm):0}%).` : 'No daily plans opened yet.';
+  const missed = lastDays(14).flatMap(d=>{ const s = dayStat(d); return s && d!==today ? s.missed.map(t=>({d,t})) : []; }).slice(-10);
+  $('#missed').innerHTML = missed.length ? missed.map(x=>`<div class="logrow miss"><span>✗</span><span>${esc(x.t)}</span><span class="small muted">${x.d.slice(5)}</span></div>`).join('') : '<span class="small muted">Nothing missed in the last 14 days.</span>';
+  // trend
+  const wt = weeklyTrend(); $('#trend').innerHTML = wt.length ? `<div class="hist">${wt.map(w=>`<i style="height:${Math.max(3,w.score||0)}%" title="week of ${w.week}: ${w.score}% over ${w.n} q${w.mocks.length?' · mocks '+w.mocks.join(', '):''}"></i>`).join('')}</div><div class="row small muted" style="gap:14px">${wt.map(w=>`<span>${w.week.slice(5)}: <b>${w.score===null?'–':w.score+'%'}</b> (${w.n}q)${w.mocks.length?' · mocks '+w.mocks.join(', '):''}</span>`).join('')}</div><p class="small muted">Weekly drill accuracy, foundation-level answers weighted to 65%. ᶠ = foundation-level mock.</p>` : '<span class="small muted">No drills yet.</span>';
+  // theory table
+  $('#theoryRows').innerHTML = TOPICS.map(t=>{ const sc = topicScore(t.id); const st = statusOf(sc); const subs = t.subs.filter(s=>!/\(book\)|\(practice papers\)/.test(s)).map(s=>{ const ss = subScore(s); return `<span class="chip ${ss?(ss.score<45?'bad':ss.score<75?'warn':'good'):''}" title="${esc(s)}">${esc(s.split(' (')[0].slice(0,22))}${ss?' '+Math.round(ss.score)+'%':''}</span>`; }).join(' ');
+    return `<tr><td>${esc(t.name)}${t.isNew?' <span class="tag new">G5</span>':''}</td><td><span class="pct">${sc.n?Math.round(sc.score)+'%':'–'}</span><span class="small muted"> n=${sc.n}</span>${bar(sc.score)}</td><td><span class="tag ${st[1]}">${st[0]}</span></td><td class="small">${subs}</td></tr>`; }).join('');
+  // mocks list
+  $('#mockRows').innerHTML = tests.filter(t=>t.mode==='mock').slice(0,8).map(t=>`<tr><td>${new Date(t.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</td><td>${t.level==='exam'?'Exam':'Foundation'}</td><td><b>${t.score}/${t.total}</b> (${Math.round(100*t.score/t.total)}%)</td></tr>`).join('') || '<tr><td colspan="3" class="small muted">No full mocks yet.</td></tr>';
+  // practical
+  $('#pracRows').innerHTML = PIECES.map(p=>`<div class="score"><span>${p.list} ${esc(p.composer)}</span><span class="n">${esc(PIECE_STAGES[S.pieces[p.id]||0])}</span><span class="pct">${Math.round(100*(S.pieces[p.id]||0)/5)}%</span>${bar(100*(S.pieces[p.id]||0)/5)}</div>`).join('') + `<div class="score"><span>Scales & arpeggios</span><span class="n">${SCALE_GROUPS.flatMap(g=>g.items).filter(i=>(S.scales[i[0]]||0)>=2).length}/28 from memory</span><span class="pct">${Math.round(scalesPct())}%</span>${bar(scalesPct())}</div>` + SR_AREAS.slice(0,2).map(([n,f])=>{ const sc = srAreaScore(f); return `<div class="score"><span>Sight-reading · ${n}</span><span class="n">${sc?sc.n+' pieces':'none'}</span><span class="pct">${sc?Math.round(sc.score)+'%':'–'}</span>${bar(sc?sc.score:0)}</div>`; }).join('') + AURAL.map(a=>{ const sc = auralScore(a.id); return `<div class="score"><span>Aural ${a.id}</span><span class="n">${sc?sc.n+' rounds':'none'}</span><span class="pct">${sc?Math.round(sc.score)+'%':'–'}</span>${bar(sc?sc.score:0)}</div>`; }).join('');
+  $('#brief').innerHTML = teacherBrief().map(l=>`<li>${esc(l)}</li>`).join('');
+  // checkpoints
+  const cps = [['2026-10-25','Keys drills secure at foundation (12+/15 twice)', (subScore('Major key signatures')||{score:0}).score>=75 && (subScore('Minor key signatures')||{score:0}).score>=75],['2026-11-14','Exam-level mock ≥ 60% — else book December', m.exam!==null && m.exam>=60],['2026-11-21','Exam-level mocks ≥ 70%', m.exam!==null && m.exam>=70],['2027-01-31','All three pieces up to tempo (stage 3)', PIECES.every(p=>(S.pieces[p.id]||0)>=3)]];
+  $('#checkpoints').innerHTML = cps.map(([d,t,ok])=>{ const due = daysTo(d); return `<div class="logrow ${ok?'ok':due<0?'miss':''}"><span>${ok?'✓':due<0?'✗':'·'}</span><span>${esc(t)}</span><span class="small muted">${d.slice(5)}${due>=0?` (${due} d)`:''}</span></div>`; }).join('');
+  const ta = $('#parentNotes'); if (parentNotes && document.activeElement !== ta) ta.value = parentNotes.text || '';
+}
+function saveNotes(){ const text = $('#parentNotes').value; parentNotes = {text, updated: new Date().toISOString()}; rpc({op:'set', path:'parent/notes', data: parentNotes}).then(()=>{ $('#notesStatus').textContent = 'Saved'; }).catch(()=>{ $('#notesStatus').textContent = 'Could not save'; }); }
+function reportForClaude(){ EV = evidence(); const L = [`PARENT MONITOR — ${iso(new Date())} — ${S.settings.name||''}`]; alerts().forEach(a=>L.push('! '+a[1])); L.push('Streak '+streak()+' d'); L.push('Theory: '+TOPICS.map(t=>{ const sc = topicScore(t.id); return `${t.id} ${sc.n?Math.round(sc.score)+'%':'-'}(${sc.n})`; }).join(' ')); const m = mockStats(); L.push(`Mocks exam ${m.exam===null?'-':Math.round(m.exam)+'%'} found ${m.found===null?'-':Math.round(m.found)+'%'}`); tests.slice(0,10).forEach(t=>L.push(` ${iso(new Date(t.ts))} ${t.mode} ${t.level||'?'} ${t.score}/${t.total}${t.sub?' '+t.sub:''}`)); L.push('Sub-areas: '+Object.entries(EV.SUB).map(([k,e])=>`${k} ${Math.round(100*e.wr/e.n)}%(${e.n})`).join('; ')); L.push('SR: '+SR_AREAS.map(([n,f])=>{ const sc = srAreaScore(f); return `${n} ${sc?Math.round(sc.score)+'%('+sc.n+')':'-'}`; }).join('; ')); L.push('Aural: '+AURAL.map(a=>{ const sc=auralScore(a.id); return `${a.id} ${sc?Math.round(sc.score)+'%('+sc.n+')':'-'}`; }).join(' ')); L.push('Pieces '+PIECES.map(p=>p.list+':'+(S.pieces[p.id]||0)).join(' ')+' · scales '+Math.round(scalesPct())+'%'); L.push('Log: '+lastDays(14).map(d=>{ const s = dayStat(d); return d.slice(5)+(s?`=${s.dn}/${s.n}`:'=·'); }).join(' ')); if (parentNotes&&parentNotes.text) L.push('Parent notes: '+parentNotes.text); const txt = L.join('\n');
+  const done = () => { $('#reportStatus').textContent = 'Copied — paste it to Claude'; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(()=>{ $('#reportBox').hidden=false; $('#reportBox').value = txt; }); else { $('#reportBox').hidden=false; $('#reportBox').value = txt; } }
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.id==='keyConnect') connect($('#keyInput').value); if (b.id==='saveNotes') saveNotes(); if (b.id==='copyReport') reportForClaude(); if (b.id==='refresh') pull(false); });
+(function(){ const k = lsGetM('g5:parentKey'); if (k) { $('#keyInput').value = k; connect(k); } })();
+
+</script>
+</body>
+</html>

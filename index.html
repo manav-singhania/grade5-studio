@@ -1379,7 +1379,8 @@ async function pullAll(initial){
   if (!syncReady() || SYNC.busy) return; SYNC.busy = true;
   try { const j = await rpc({ op:'list', since: initial ? 0 : Math.max(0, SYNC.lastNow - 5000) }); const outboxPaths = new Set(outboxGet().map(w=>w.path));
     const docs = {}; Object.entries(j.docs||{}).forEach(([p,d])=>{ if (!outboxPaths.has(p)) docs[p] = d; }); // never overwrite a pending local write
-    if (docs['state/main'] || (j.docs||{})['state/main']) SYNC.remoteHasState = true; const changed = applyDocs(docs); SYNC.lastNow = Math.max(SYNC.lastNow, Number(j.now||0)); if (changed || initial) renderAll(); setSyncStatus('Synced ' + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})); }
+    if (docs['state/main'] || (j.docs||{})['state/main']) SYNC.remoteHasState = true; const changed = applyDocs(docs); SYNC.lastNow = Math.max(SYNC.lastNow, Number(j.now||0)); if (changed || initial) renderAll();
+    if (initial && !SYNC.remoteHasState && lsGet('g5:state/main')) pushLocalAll(); /* store empty but this device has a record: upload it */ setSyncStatus('Synced ' + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})); }
   catch(e) { setSyncStatus('Offline — working from this device’s copy'); }
   finally { SYNC.busy = false; }
 }
@@ -1414,6 +1415,8 @@ function progressReport(){
 function copyReport(){ const txt = progressReport(); const done = () => toast('Report copied — paste it to Claude');
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(()=>{ showReport(txt); }); else showReport(txt); }
 function showReport(txt){ const el = $('#reportBox'); el.hidden = false; el.value = txt; el.select(); toast('Select all and copy'); }
+
+function pushLocalAll(){ remoteSet('state/main', S); tests.forEach(t=>{ const {id, ...rest} = t; remoteSet('tests/'+id, rest); }); Object.entries(logs).forEach(([d,v])=>remoteSet('log/'+d, v)); Object.entries(practice).forEach(([d,v])=>remoteSet('practice/'+d, v)); SYNC.remoteHasState = true; }
 
 function bootStandalone(){ const local = lsGet('g5:state/main'); if (local) S = migrate(merge(S, local)); tests = lsGet('g5:tests')||[]; logs = lsGet('g5:logs')||{}; videos = lsGet('g5:videos')||{}; practice = lsGet('g5:practice')||{}; renderAll(); initSync(); if (!syncReady()) loadUpdates(); }
 
