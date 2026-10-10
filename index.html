@@ -1416,6 +1416,13 @@ function copyReport(){ const txt = progressReport(); const done = () => toast('R
 function showReport(txt){ const el = $('#reportBox'); el.hidden = false; el.value = txt; el.select(); toast('Select all and copy'); }
 
 function pushLocalAll(){ remoteSet('state/main', S); tests.forEach(t=>{ const {id, ...rest} = t; remoteSet('tests/'+id, rest); }); Object.entries(logs).forEach(([d,v])=>remoteSet('log/'+d, v)); Object.entries(practice).forEach(([d,v])=>remoteSet('practice/'+d, v)); SYNC.remoteHasState = true; }
+/* ---------- active-time tracking (app) ---------- */
+let lastInteraction = Date.now(); let timeAcc = {}; let timeDirty = false;
+['pointerdown','keydown','touchstart','scroll'].forEach(ev => document.addEventListener(ev, ()=>{ lastInteraction = Date.now(); }, {passive:true}));
+function currentArea(){ const tab = (document.querySelector('nav.tabs button[aria-selected="true"]')||{}).dataset || {}; const t = tab.tab || 'today'; if (t==='tests') return 'tests'; if (t==='sr') return 'sr'; if (t==='practical') return 'practical'; if (t==='theory') return 'theory'; return 'today'; }
+setInterval(()=>{ if (document.hidden) return; if (Date.now() - lastInteraction > 120000) return; const a = currentArea(); timeAcc[a] = (timeAcc[a]||0) + 15; timeDirty = true; }, 15000);
+function flushTime(){ if (!timeDirty) return; timeDirty = false; const d = todayISO(); practice[d] = practice[d] || {date:d, sr:[], aural:{}}; const t = practice[d].time || {}; Object.entries(timeAcc).forEach(([k,v])=>{ t[k] = (t[k]||0) + v; }); timeAcc = {}; practice[d].time = t; practice[d].lastActive = Date.now(); lsSet('g5:practice', practice); if (db) db.collection('practice').doc(d).set(practice[d]).catch(()=>{}); }
+setInterval(flushTime, 60000); document.addEventListener('visibilitychange', ()=>{ if (document.hidden) flushTime(); }); window.addEventListener('pagehide', flushTime);
 
 function bootStandalone(){ const local = lsGet('g5:state/main'); if (local) S = migrate(merge(S, local)); tests = lsGet('g5:tests')||[]; logs = lsGet('g5:logs')||{}; videos = lsGet('g5:videos')||{}; practice = lsGet('g5:practice')||{}; renderAll(); initSync(); if (!syncReady()) loadUpdates(); }
 
