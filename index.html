@@ -474,7 +474,13 @@ const T = (() => {
       {q:'In 7/8 the quavers are normally grouped as…', a:'2+2+3 or 3+2+2 (or 2+3+2)', o:['4+4','3+3+1','7 equal beats with no grouping']},
       {q:'In 5/4 the beats are normally grouped as…', a:'3+2 or 2+3', o:['4+1','5 equal beats, never grouped','2+2+1']},
       {q:'Which of these is a compound time signature?', a:'9/8', o:['3/4','5/4','2/2']},
-      {q:'Which of these is an irregular time signature?', a:'7/4', o:['6/8','12/8','3/2']}
+      {q:'Which of these is an irregular time signature?', a:'7/4', o:['6/8','12/8','3/2']},
+      {q:'How many quaver beats are in one bar of 7/8?', a:'7 quavers', o:['6 quavers','8 quavers','5 quavers']},
+      {q:'How many crotchet beats are in a bar of 5/4?', a:'5', o:['4','6','3']},
+      {q:'A bar of 6/8 has how many dotted-crotchet beats?', a:'2', o:['3','6','4']},
+      {q:'A bar of 9/8 has how many dotted-crotchet beats?', a:'3', o:['2','9','4']},
+      {q:'In 5/8 the quavers are usually grouped as…', a:'3+2 or 2+3', o:['4+1','5 equal, never grouped','2+2+1']},
+      {q:'A dotted crotchet is worth how many quavers?', a:'3 quavers', o:['2 quavers','4 quavers','one and a half quavers']}
     ];
     const it = pick(F() ? items.slice(0,2).concat([items[6]]) : items);
     return { topic:'t3', sub:'Irregular divisions (tuplets)', prompt: it.q, options: shuffle([it.a, ...it.o]), answer: it.a, explain:'Irregular divisions: a triplet = 2 of the same value, a duplet = 3 (in compound time), quintuplets and sextuplets = 4 of the same value. Irregular time signatures (5 and 7) are grouped in 2s and 3s.' };
@@ -582,7 +588,13 @@ const T = (() => {
       {q:'In a 2nd-inversion chord, which note is in the bass?', a:'the 5th', o:['the root','the 3rd','the 7th']},
       {q:'Chord II in a major key is which type of triad?', a:'minor', o:['major','diminished','augmented']},
       {q:'Chord IVb in G major contains which notes (lowest first)?', a:'E – G – C', o:['C – E – G','G – C – E','D – G – B']},
-      {q:'A cadence ending IV – I is best described as…', a:'plagal', o:['perfect','imperfect','interrupted']}
+      {q:'A cadence ending IV – I is best described as…', a:'plagal', o:['perfect','imperfect','interrupted']},
+      {q:'A perfect cadence (V–I) gives a sense of…', a:'a finished, final ending', o:['an unfinished, questioning ending','a sudden surprise','a change of key']},
+      {q:'An imperfect cadence gives a sense of…', a:'an unfinished, questioning ending', o:['a finished, final ending','the Amen at the end of a hymn','no change at all']},
+      {q:'A Ic–V–I progression is a common way to approach which cadence?', a:'a perfect cadence', o:['a plagal cadence','an imperfect cadence','an interrupted cadence']},
+      {q:'In C major, which three notes make the dominant chord (V)?', a:'G – B – D', o:['C – E – G','F – A – C','D – F – A']},
+      {q:'In C major, which three notes make the subdominant chord (IV)?', a:'F – A – C', o:['G – B – D','C – E – G','A – C – E']},
+      {q:'An imperfect cadence ends on which chord?', a:'V (the dominant)', o:['I (the tonic)','IV (the subdominant)','VI (the submediant)']}
     ];
     const it = pick(F() ? items.filter(x=>/perfect|imperfect|2nd-inversion|IVb/.test(x.q) && !/plagal/.test(x.q)) : items);
     return { topic:'t7', sub:'Cadences', prompt:it.q, options: shuffle([it.a, ...it.o]), answer: it.a, explain:'Grade 5 cadences: perfect V–I (sounds finished), plagal IV–I (the “Amen”), imperfect = anything → V (sounds unfinished). Interrupted V–VI is Grade 6. Inversions: a = root in bass, b = 3rd in bass, c = 5th in bass.',
@@ -661,6 +673,15 @@ const T = (() => {
     ['How is sound produced on a brass instrument?','the player’s lips vibrating in a cup mouthpiece',['a vibrating single reed','air blown across an open hole','a bow drawn across strings']],
     ['Which is the highest female voice?','soprano',['mezzo-soprano','alto','contralto']],
     ['Which is the lowest male voice?','bass',['baritone','tenor','countertenor']],
+    ['Which is the lowest female voice?','contralto (alto)',['soprano','mezzo-soprano','tenor']],
+    ['Which is the highest male voice?','tenor',['baritone','bass','alto']],
+    ['Which female voice lies between soprano and alto?','mezzo-soprano',['tenor','baritone','contralto']],
+    ['Which male voice lies between tenor and bass?','baritone',['alto','mezzo-soprano','soprano']],
+    ['Which family does the trombone belong to?','brass',['woodwind','strings','percussion']],
+    ['Which family does the harp belong to?','strings',['woodwind','percussion','brass']],
+    ['The timpani belong to which family?','percussion',['brass','strings','woodwind']],
+    ['Which instrument is a single-reed woodwind?','clarinet',['oboe','flute','bassoon']],
+    ['Which clef does the viola normally read?','the alto clef',['the treble clef','the bass clef','the tenor clef']],
     ['Put the standard choir voices from highest to lowest:','soprano, alto, tenor, bass',['alto, soprano, tenor, bass','soprano, tenor, alto, bass','tenor, alto, soprano, bass']],
     ['The baritone voice lies between which two?','tenor and bass',['alto and tenor','soprano and alto','mezzo-soprano and alto']],
     ['Which clef does the tenor voice usually read in a vocal score?','treble clef (sounding an octave lower), or bass clef',['alto clef','tenor clef only','bass clef only']],
@@ -703,18 +724,24 @@ const T = (() => {
   const MOCK_MIX = { t1:3, t2:3, t3:3, t4:1, t5:4, t6:2, t7:3, t8:2, t9:2, t10:3, t11:4 }; // 30 questions
   function question(topic) { const q = pick(GEN[topic])(); q.id = topic + '-' + Math.random().toString(36).slice(2,8); return q; }
   function questionSub(topic, sub) { for (let i=0;i<40;i++) { const q = question(topic); if (!sub || q.sub === sub) return q; } return question(topic); }
+  function qsig(q){ try { return (q.prompt||'') + '||' + (q.answer||'') + '||' + (q.stave ? JSON.stringify([q.stave.key, q.stave.time, q.stave.clef, q.stave.notes, q.stave.alt]) : ''); } catch(e){ return (q.prompt||'') + '||' + (q.answer||''); } }
   function buildTest(mode, topic, weights) {
-    let list = [];
-    if (mode === 'topic') { for (let i=0;i<15;i++) list.push(question(topic)); }
-    else if (mode === 'quick') { const ts = shuffle(Object.keys(GEN)).slice(0,3); ts.forEach(t=>list.push(question(t))); }
-    else if (mode === 'sub') { for (let i=0;i<10;i++) list.push(questionSub(topic, weights && weights.__sub)); }
+    const anyTopic = () => question(pick(Object.keys(GEN)));
+    const slots = [];
+    if (mode === 'topic') { for (let i=0;i<15;i++) slots.push({gen:()=>question(topic), fb:anyTopic}); }
+    else if (mode === 'quick') { shuffle(Object.keys(GEN)).slice(0,3).forEach(t=>slots.push({gen:()=>question(t), fb:anyTopic})); }
+    else if (mode === 'sub') { const sub = weights && weights.__sub; for (let i=0;i<10;i++) slots.push({gen:()=>questionSub(topic, sub), fb:()=>question(topic)}); }
     else if (mode === 'weak') {
-      if (weights && Array.isArray(weights.__alloc) && weights.__alloc.length) { weights.__alloc.forEach(aa=>{ for (let i=0;i<aa.count;i++) list.push(aa.sub ? questionSub(aa.topic, aa.sub) : question(aa.topic)); }); }
-      else { const ws = Object.entries(weights||{}).filter(([k])=>k.indexOf('__')!==0).sort((a,b)=>a[1]-b[1]).slice(0,4).map(e=>e[0]); const ts = ws.length?ws:Object.keys(GEN); for (let i=0;i<12;i++) list.push(question(ts[i%ts.length])); }
-      list = shuffle(list);
+      if (weights && Array.isArray(weights.__alloc) && weights.__alloc.length) { weights.__alloc.forEach(aa=>{ for (let i=0;i<aa.count;i++) slots.push({gen:()=> aa.sub ? questionSub(aa.topic, aa.sub) : question(aa.topic), fb:()=>question(aa.topic)}); }); }
+      else { const ws = Object.entries(weights||{}).filter(([k])=>k.indexOf('__')!==0).sort((a,b)=>a[1]-b[1]).slice(0,4).map(e=>e[0]); const ts = ws.length?ws:Object.keys(GEN); for (let i=0;i<12;i++){ const tp = ts[i%ts.length]; slots.push({gen:()=>question(tp), fb:()=>question(tp)}); } }
     }
-    else { Object.entries(MOCK_MIX).forEach(([t,n])=>{ for (let i=0;i<n;i++) list.push(question(t)); }); list = shuffle(list); }
-    return list;
+    else { Object.entries(MOCK_MIX).forEach(([t,n])=>{ for (let i=0;i<n;i++) slots.push({gen:()=>question(t), fb:()=>question(t)}); }); }
+    const seen = new Set(); const list = [];
+    slots.forEach(s=>{ let q = s.gen(), sg = qsig(q), tries = 0;
+      while (seen.has(sg) && tries++ < 30){ q = tries>18 ? anyTopic() : (tries>8 ? (s.fb||anyTopic)() : s.gen()); sg = qsig(q); }
+      seen.add(sg); list.push(q); });
+    if (mode === 'topic' || mode === 'sub') return list;
+    return shuffle(list);
   }
   function availableSubs(){ const map = {}; Object.keys(GEN).forEach(t=>{ const s = new Set(); for (let i=0;i<60;i++){ const q = question(t); s.add(q.sub||''); } map[t] = [...s]; }); return map; }
   const setLevel = l => { LEVEL = l === 'exam' ? 'exam' : 'foundation'; };
@@ -1032,7 +1059,7 @@ function avail(){ const lv = S.settings.level||'foundation'; if (_avail && _avai
 const DIST_TARGET = 85;
 function weakBuckets(){ const out = []; const av = avail(); Object.entries(av).forEach(([t, subs])=>{ const tw = TOPIC_WEIGHT[t]||1; const list = subs.length?subs:['']; list.forEach(sub=>{ const sc = sub?subScore(sub):topicScore(t); let need; if (!sc || !sc.n) need = 55*tw; else need = Math.max(5, DIST_TARGET - sc.score)*tw; out.push({topic:t, sub:sub||null, need, label: sub || (TOPICS.find(x=>x.id===t)||{}).name}); }); }); out.sort((x,y)=>y.need-x.need); return out; }
 function topWeakAreas(k){ return weakBuckets().slice(0,k).map(b=>b.label); }
-function adaptiveAlloc(n){ n = n||16; const top = weakBuckets().slice(0,8); if (!top.length) return [{topic:'t5', sub:null, count:n}]; const tot = top.reduce((a,b)=>a+b.need,0)||1; let alloc = top.map(b=>({topic:b.topic, sub:b.sub, count: Math.max(1, Math.round(n*b.need/tot))})); const cap = Math.max(2, Math.round(n*0.4)); alloc.forEach(a=>{ if (a.count>cap) a.count=cap; }); let s = alloc.reduce((a,x)=>a+x.count,0); let guard=0; while (s>n && guard++<50){ const mx = alloc.reduce((p,c)=>c.count>p.count?c:p, alloc[0]); mx.count--; s--; } guard=0; while (s<n && guard++<50){ const mn = alloc.reduce((p,c)=>c.count<p.count?c:p, alloc[0]); mn.count++; s++; } return alloc.filter(a=>a.count>0); }
+function adaptiveAlloc(n){ n = n||16; const top = weakBuckets().slice(0,8); if (!top.length) return [{topic:'t5', sub:null, count:n}]; const tot = top.reduce((a,b)=>a+b.need,0)||1; let alloc = top.map(b=>({topic:b.topic, sub:b.sub, count: Math.max(1, Math.round(n*b.need/tot))})); const cap = Math.max(2, Math.round(n*0.25)); alloc.forEach(a=>{ if (a.count>cap) a.count=cap; }); let s = alloc.reduce((a,x)=>a+x.count,0); let guard=0; while (s>n && guard++<50){ const mx = alloc.reduce((p,c)=>c.count>p.count?c:p, alloc[0]); mx.count--; s--; } guard=0; while (s<n && guard++<50){ const mn = alloc.reduce((p,c)=>c.count<p.count?c:p, alloc[0]); mn.count++; s++; } return alloc.filter(a=>a.count>0); }
 
 /* ---------- Rendering ---------- */
 function renderAll(){ EV = evidence(); renderHeader(); renderToday(); renderTheory(); renderTestsHome(); renderPractical(); renderLog(); renderSettings(); renderPracticeStats(); }
