@@ -14,6 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
+<script>window.__G5_BUILD__='2026-10-13.1029';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -731,6 +732,7 @@ const T = (() => {
     if (mode === 'topic') { for (let i=0;i<15;i++) slots.push({gen:()=>question(topic), fb:anyTopic}); }
     else if (mode === 'quick') { shuffle(Object.keys(GEN)).slice(0,3).forEach(t=>slots.push({gen:()=>question(t), fb:anyTopic})); }
     else if (mode === 'sub') { const sub = weights && weights.__sub; for (let i=0;i<10;i++) slots.push({gen:()=>questionSub(topic, sub), fb:()=>question(topic)}); }
+    else if (mode === 'review') { const ts = (weights && Array.isArray(weights.__topics) && weights.__topics.length) ? weights.__topics : Object.keys(GEN); for (let i=0;i<10;i++){ const tp = pick(ts); slots.push({gen:()=>question(tp), fb:anyTopic}); } }
     else if (mode === 'weak') {
       if (weights && Array.isArray(weights.__alloc) && weights.__alloc.length) { weights.__alloc.forEach(aa=>{ for (let i=0;i<aa.count;i++) slots.push({gen:()=> aa.sub ? questionSub(aa.topic, aa.sub) : question(aa.topic), fb:()=>question(aa.topic)}); }); }
       else { const ws = Object.entries(weights||{}).filter(([k])=>k.indexOf('__')!==0).sort((a,b)=>a[1]-b[1]).slice(0,4).map(e=>e[0]); const ts = ws.length?ws:Object.keys(GEN); for (let i=0;i<12;i++){ const tp = ts[i%ts.length]; slots.push({gen:()=>question(tp), fb:()=>question(tp)}); } }
@@ -1059,6 +1061,7 @@ function avail(){ const lv = S.settings.level||'foundation'; if (_avail && _avai
 const DIST_TARGET = 85;
 function weakBuckets(){ const out = []; const av = avail(); Object.entries(av).forEach(([t, subs])=>{ const tw = TOPIC_WEIGHT[t]||1; const list = subs.length?subs:['']; list.forEach(sub=>{ const sc = sub?subScore(sub):topicScore(t); let need; if (!sc || !sc.n) need = 55*tw; else need = Math.max(5, DIST_TARGET - sc.score)*tw; out.push({topic:t, sub:sub||null, need, label: sub || (TOPICS.find(x=>x.id===t)||{}).name}); }); }); out.sort((x,y)=>y.need-x.need); return out; }
 function topWeakAreas(k){ return weakBuckets().slice(0,k).map(b=>b.label); }
+function seenTopics(){ const s = TOPICS.filter(t=>topicScore(t.id).n>0).map(t=>t.id); return s.length>=2 ? s : Object.keys(T.GEN); }
 function adaptiveAlloc(n){ n = n||16; const top = weakBuckets().slice(0,8); if (!top.length) return [{topic:'t5', sub:null, count:n}]; const tot = top.reduce((a,b)=>a+b.need,0)||1; let alloc = top.map(b=>({topic:b.topic, sub:b.sub, count: Math.max(1, Math.round(n*b.need/tot))})); const cap = Math.max(2, Math.round(n*0.25)); alloc.forEach(a=>{ if (a.count>cap) a.count=cap; }); let s = alloc.reduce((a,x)=>a+x.count,0); let guard=0; while (s>n && guard++<50){ const mx = alloc.reduce((p,c)=>c.count>p.count?c:p, alloc[0]); mx.count--; s--; } guard=0; while (s<n && guard++<50){ const mn = alloc.reduce((p,c)=>c.count<p.count?c:p, alloc[0]); mn.count++; s++; } return alloc.filter(a=>a.count>0); }
 
 /* ---------- Rendering ---------- */
@@ -1073,7 +1076,6 @@ function renderToday(){
   const learn = order[0];
   const scalesTodo = SCALE_GROUPS.flatMap(g=>g.items).filter(i=>(S.scales[i[0]]||0)<3); const scaleNames = scalesTodo.slice(0,3).map(i=>i[1]).join(', ') || 'maintenance: run all 28 items';
   const weakestPiece = PIECES.slice().sort((a,b)=>(S.pieces[a.id]||0)-(S.pieces[b.id]||0))[0];
-  const isVideo = v => v && /youtube\.com|youtu\.be|vimeo\.com/.test(v.url);
   const items = [];
   if (onTravel(date)) {
     $('#todayPhase').textContent = 'Travelling · light plan'; $('#todayPhase').className='tag';
@@ -1085,9 +1087,8 @@ function renderToday(){
     const learnActs = [{label:'📖 Read the lesson', topic:learn.id}, {label:'Then drill it', sec:true, start:'topic', topic:learn.id}];
     items.push({k:'learn', m:Math.round(mins*0.4), t:`Learn: ${learn.name}`, d:`Read the short lesson and key facts on the topic card, then work the matching pages in your book.`, acts: learnActs});
     items.push({k:'drill', m:Math.round(mins*0.3), t: dow===6 ? 'Full mock test (timed)' : 'Weak-spot drill (adaptive)', d: dow===6 ? 'Saturday is mock day: do the 30-question mock in one sitting.' : `About 16 questions, concentrated where you're weakest right now: ${topWeakAreas(3).join(', ')||'all areas'}. Read every explanation.`, acts: dow===6 ? [{label:'▶ Start full mock', start:'mock'}] : [{label:'▶ Start weak-spot drill', start:'weak'},{label:`Just ${learn.name}`, sec:true, start:'topic', topic:learn.id}]});
-    const prac = [1,3,5].includes(dow) ? {t:'Scales: '+scaleNames, d:'Click each scale to see and hear it, play from memory slowly, then at ♩=100. Move its stage when it improves.', acts:[{label:'Open scales (notation + playback)', section:'secScales'}]} : [2,4].includes(dow) ? {t:`Piece: ${weakestPiece.list} ${weakestPiece.composer} — ${weakestPiece.title.split(' (')[0]}`, d:'Hands separately on the hardest 4 bars, then hands together slowly. Tick the next stage when it is true.', acts:[{label:'Open pieces', section:'secPieces'}]} : dow===6 ? {t:'Sight-reading: 3 unseen pieces', d:'Each: 30 seconds to look, play through without stopping, then log the result.', acts:[{label:'▶ Start sight-reading', tool:'sr'}]} : {t:'Aural: tests A, B and D with the trainer', d:'Sing back, sing six notes from score, clap the rhythm — 3 rounds each, answer Yes/No honestly. Test C quiz if time.', acts:[{label:'▶ Start aural trainer', tool:'aural'}]};
-    items.push({k:'prac', m:mins - Math.round(mins*0.4) - Math.round(mins*0.3), t:prac.t, d:prac.d, acts:prac.acts});
-    $('#lessonNote').innerHTML = `<b>Lessons:</b> ${esc(S.settings.lesson1)}. Bring to your teacher: anything marked “Needs work” in Theory, and ask for a 5-minute aural test each lesson.`;
+    items.push({k:'review', m:mins - Math.round(mins*0.4) - Math.round(mins*0.3), t:'Mixed recall: 10 questions on topics you’ve already done', d:'Extra practice — 10 random questions drawn from the topics you’ve worked before, so older material stays fresh. Read every explanation.', acts:[{label:'▶ Start mixed recall', start:'review'}]});
+    $('#lessonNote').innerHTML = `<b>Theory only until the exam.</b> Pieces, scales, sight-reading and aural are still in their tabs for lesson time, but the daily plan stays on theory. <br><b>Lessons:</b> ${esc(S.settings.lesson1)}.`;
   } else {
     $('#todayPhase').textContent = 'Phase 2 · Practical'; $('#todayPhase').className='tag';
     items.push({k:'prac', m:Math.round(mins*0.2), t:'Scales & arpeggios: '+scaleNames, d:'Rotate through the 28 items; move each one’s stage when it improves.', acts:[{label:'Open scales (notation + playback)', section:'secScales'}]});
@@ -1184,10 +1185,10 @@ function renderSettings(){ $('#sName').value = S.settings.name||''; $('#sTheory'
 /* ---------- Tests ---------- */
 let run = null;
 function startTest(mode, topic, sub){
-  T.setLevel(S.settings.level||'foundation'); const w = weakWeights(); if (sub) w.__sub = sub; if (mode==='weak') w.__alloc = adaptiveAlloc(16); const qs = T.buildTest(mode, topic, w);
+  T.setLevel(S.settings.level||'foundation'); const w = weakWeights(); if (sub) w.__sub = sub; if (mode==='weak') w.__alloc = adaptiveAlloc(16); if (mode==='review') w.__topics = seenTopics(); const qs = T.buildTest(mode, topic, w);
   run = { mode, topic, sub, qs, i:0, score:0, byTopic:{}, bySub:{}, answered:false };
   $('#testHome').hidden = true; $('#testDone').hidden = true; $('#testRun').hidden = false;
-  $('#runLabel').textContent = ((S.settings.level||'foundation')==='exam' ? 'Exam level · ' : 'Foundation level · ') + (mode==='mock' ? 'Full mock' : mode==='weak' ? 'Weak-spot drill' : mode==='quick' ? 'Sync check' : mode==='sub' ? sub : 'Topic drill: ' + TOPICS.find(t=>t.id===topic).name);
+  $('#runLabel').textContent = ((S.settings.level||'foundation')==='exam' ? 'Exam level · ' : 'Foundation level · ') + (mode==='mock' ? 'Full mock' : mode==='weak' ? 'Weak-spot drill' : mode==='review' ? 'Mixed recall' : mode==='quick' ? 'Sync check' : mode==='sub' ? sub : 'Topic drill: ' + TOPICS.find(t=>t.id===topic).name);
   showQ();
 }
 function showQ(){
@@ -1461,6 +1462,12 @@ function copyReport(){ const txt = progressReport(); const done = () => toast('R
 function showReport(txt){ const el = $('#reportBox'); el.hidden = false; el.value = txt; el.select(); toast('Select all and copy'); }
 
 function pushLocalAll(){ remoteSet('state/main', S); tests.forEach(t=>{ const {id, ...rest} = t; remoteSet('tests/'+id, rest); }); Object.entries(logs).forEach(([d,v])=>remoteSet('log/'+d, v)); Object.entries(practice).forEach(([d,v])=>remoteSet('practice/'+d, v)); SYNC.remoteHasState = true; }
+/* ---------- build version / auto-update ---------- */
+const G5_BUILD = (typeof window !== 'undefined' && window.__G5_BUILD__) || '';
+function showBuildTag(){ try { const st = document.getElementById('subtitle'); if (st && G5_BUILD && !document.getElementById('buildTag')) st.insertAdjacentHTML('beforeend', ' · <span id="buildTag" class="small muted">build ' + G5_BUILD + '</span>'); } catch(e){} }
+function showUpdateBanner(){ if (document.getElementById('updBanner')) return; const d = document.createElement('div'); d.id = 'updBanner'; d.setAttribute('style','position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:9999;background:var(--accent);color:var(--accent-ink);padding:9px 16px;border-radius:999px;font-weight:600;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.25);cursor:pointer'); d.textContent = 'New version available. Tap to update.'; d.onclick = function(){ location.reload(true); }; document.body.appendChild(d); }
+async function checkVersion(){ try { const r = await fetch('version.json?cb=' + Date.now(), {cache:'no-store'}); const v = await r.json(); if (v && v.build && G5_BUILD && v.build !== G5_BUILD) showUpdateBanner(); } catch(e){} }
+try { showBuildTag(); checkVersion(); setInterval(checkVersion, 300000); document.addEventListener('visibilitychange', function(){ if (!document.hidden) checkVersion(); }); } catch(e){}
 /* ---------- active-time tracking (app) ---------- */
 let lastInteraction = Date.now(); let timeAcc = {}; let timeDirty = false;
 ['pointerdown','keydown','touchstart','scroll'].forEach(ev => document.addEventListener(ev, ()=>{ lastInteraction = Date.now(); }, {passive:true}));
