@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-18.0202';</script>
+<script>window.__G5_BUILD__='2026-10-18.0218';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -248,6 +248,11 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <section class="view" id="view-tests">
   <div class="stack">
     <div id="testHome" class="stack">
+      <div class="card stack" id="examNudge" hidden style="border-color:var(--accent);background:var(--accent-soft)">
+        <div class="row between"><b>🎯 Ready to step up to Grade 5 questions</b></div>
+        <p class="small" id="examNudgeText"></p>
+        <div class="row"><button class="btn primary sm" data-level="exam">Switch to Exam · Grade 5</button><span class="small muted">Foundation stays available any time.</span></div>
+      </div>
       <div class="card row between">
         <div><b>Question level</b><br><span class="small muted" id="levelNote"></span></div>
         <div class="steps" id="levelSwitch" style="min-width:260px"><button data-level="foundation">Foundation · Grade 3–4</button><button data-level="exam">Exam · Grade 5</button></div>
@@ -949,7 +954,7 @@ const AURAL = [
   {id:'D', name:'D · Clap the rhythm, name the time', desc:'Clap back an extract (up to 6 bars) from the same piece; say whether it is in 2, 3 or 4 time.'}
 ];
 const TOPIC_WEIGHT = {t1:1,t2:1.2,t3:1.2,t4:.6,t5:1.3,t6:.8,t7:1.3,t8:1,t9:.8,t10:1,t11:1.2};
-const FOUND_CAP = 0.65;
+const FOUND_CAP = 0.75;
 
 /* ---------- State ---------- */
 const DEFAULT = {
@@ -1039,7 +1044,14 @@ let EV = {T:{}, SUB:{}};
 function topicScore(id){ const e = EV.T[id]; const seed = Number(S.seed[id]||0); if (!e || !e.n) return {score: seed*0.6, n:0, nx:0, basis:'seed'};
   const ev = 100*e.wr/e.n; const k = Math.min(1, e.n/8); return {score: ev*k + seed*0.6*(1-k), n:e.n, nx:e.nx, acc: e.r/e.n, basis: k<1?'mixed':'evidence'}; }
 function subScore(name){ const e = EV.SUB[name]; if (!e || !e.n) return null; return {score:100*e.wr/e.n, n:e.n, nx:e.nx, acc:e.r/e.n}; }
-function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; if (sc.score < 45) return ['Needs work','bad']; if (sc.score < 75) return ['Developing','warn']; if (sc.nx < 6) return ['Secure at foundation','warn']; if (sc.score >= 88 && sc.nx >= 10) return ['Distinction level','good']; return ['Secure','good']; }
+function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; const acc = (sc.acc!=null ? sc.acc*100 : sc.score);
+  if (sc.score >= 88 && sc.nx >= 10) return ['Distinction level','good'];
+  if (sc.score >= 75 && sc.nx >= 6) return ['Secure','good'];
+  if (acc >= 85) return sc.nx >= 6 ? ['Strong','good'] : ['Strong — try Exam level','good'];
+  if (acc >= 68) return ['Developing','warn'];
+  if (acc < 50) return ['Needs work','bad'];
+  return ['Developing','warn']; }
+function foundationReady(){ if ((S.settings.level||'foundation')!=='foundation') return false; let strong=0, enough=0; TOPICS.forEach(t=>{ const sc=topicScore(t.id); if (sc.n>=8){ enough++; if ((sc.acc!=null?sc.acc:0)>=0.85) strong++; } }); return enough>=4 && strong>=Math.max(4, Math.ceil(enough*0.6)); }
 function theoryPct(){ let w=0,s=0; TOPICS.forEach(t=>{ w+=TOPIC_WEIGHT[t.id]; s+=TOPIC_WEIGHT[t.id]*topicScore(t.id).score; }); return w?s/w:0; }
 function mockStats(){ const ex = tests.filter(t=>t.mode==='mock'&&t.level==='exam').slice(0,3), fo = tests.filter(t=>t.mode==='mock'&&t.level!=='exam').slice(0,3); return { exam: ex.length?avg(ex.map(t=>100*t.score/t.total)):null, found: fo.length?avg(fo.map(t=>100*t.score/t.total)):null, nExam: ex.length }; }
 function theoryReadiness(){ const m = mockStats(); const tp = theoryPct(); return m.exam===null ? tp*0.9 : tp*0.5 + m.exam*0.5; }
@@ -1068,7 +1080,7 @@ function adaptiveAlloc(n){ n = n||16; const top = weakBuckets().slice(0,8); if (
 /* ---------- Rendering ---------- */
 function renderAll(){ EV = evidence(); renderHeader(); renderToday(); renderTheory(); renderTestsHome(); renderPractical(); renderLog(); renderSettings(); renderPracticeStats(); }
 function renderHeader(){ $('#title').textContent = S.settings.name ? S.settings.name + ' · Grade 5' : 'Grade 5 Studio'; $('#dTheory').textContent = daysTo(S.settings.theoryDate); $('#dPrac').textContent = daysTo(S.settings.pracDate); }
-function scoreRow(label, sc, extra){ const st = statusOf(sc); const v = sc ? Math.round(sc.score) : 0; return `<div class="score"><span>${label}${extra?` <span class="small muted">${extra}</span>`:''}</span><span class="n">${sc&&sc.n?`n=${sc.n}${sc.nx?` (${sc.nx} exam)`:''}`:'not yet drilled'}</span><span class="row" style="gap:6px"><span class="tag ${st[1]}">${st[0]}</span><span class="pct">${sc&&sc.n?v+'%':'–'}</span></span><div class="bar thin"><i style="width:${v}%"></i></div></div>`; }
+function scoreRow(label, sc, extra){ const st = statusOf(sc); const v = sc ? Math.round(sc.score) : 0; const accTxt = (sc && sc.n && sc.acc!=null) ? `<span class="small muted" title="Raw % correct">${Math.round(sc.acc*100)}% correct</span>` : ''; return `<div class="score"><span>${label}${extra?` <span class="small muted">${extra}</span>`:''}</span><span class="n">${sc&&sc.n?`n=${sc.n}${sc.nx?` (${sc.nx} exam)`:''}`:'not yet drilled'}</span><span class="row" style="gap:6px">${accTxt}<span class="tag ${st[1]}">${st[0]}</span><span class="pct" title="Grade-5 readiness score">${sc&&sc.n?v+'%':'–'}</span></span><div class="bar thin"><i style="width:${v}%"></i></div></div>`; }
 
 function renderToday(){
   EV = evidence();
@@ -1103,7 +1115,7 @@ function renderToday(){
   const done = (logs[date] && logs[date].done) || [];
   $('#todayList').innerHTML = plan.map(it => `<div class="today-item"><span class="mins">${it.m}′</span><span><b>${esc(it.t)}</b><br><span class="small muted">${esc(it.d)}</span>${it.acts?`<span class="acts">${it.acts.map(a=> a.href ? `<a href="${esc(a.href)}" target="_blank" rel="noopener" class="${a.sec?'sec':''}">${esc(a.label)}</a>` : `<button type="button" class="${a.sec?'sec':''}" ${a.start?`data-start="${a.start}" data-starttopic="${a.topic||''}" data-startsub="${esc(a.sub||'')}"`:''} ${a.topic&&!a.start?`data-opentopic="${a.topic}"`:''} ${a.section?`data-section="${a.section}"`:''} ${a.tool?`data-tool="${a.tool}"`:''}>${esc(a.label)}</button>`).join('')}</span>`:''}</span><input type="checkbox" data-done="${it.k}" ${done.includes(it.k)?'checked':''} aria-label="Done"></div>`).join('');
   $('#todayTitle').textContent = `Today · ${mins} minutes`;
-  $('#todayNote').innerHTML = `Tick items as you finish them — they go into your practice log. <button type="button" class="btn sm" id="replan" style="margin-left:6px">Re-plan today</button>`;
+  $('#todayNote').innerHTML = `Tick items as you finish them — they go into your practice log. <button type="button" class="btn sm" id="replan" style="margin-left:6px">Re-plan today</button>` + (foundationReady() ? ` <span class="tag good" style="margin-left:6px">🎯 Ready for Exam · Grade 5 — switch on the Mock Tests tab</span>` : '');
   const tr = theoryReadiness(), pr = practicalReadiness(); const m = mockStats();
   $('#readiness').innerHTML = [['Theory',tr,`${daysTo(S.settings.theoryDate)} days`],['Practical',pr,`${daysTo(S.settings.pracDate)} days`]].map(([n,v,d])=>`<div class="card"><div class="eyebrow">${n}</div><div class="kpi">${Math.round(v)}%</div><div class="small muted">${d}</div><div class="bar thin" style="margin-top:8px"><i style="width:${Math.round(v)}%"></i></div></div>`).join('');
   $('#readinessNote').textContent = `Goal: Distinction (theory 65/75 = 87%; practical 130/150). Theory = topic scores blended with your last exam-level mocks${m.exam!==null?` (avg ${Math.round(m.exam)}%)`:' (none yet)'}. Practical weights the four sections by their exam marks; pieces and scales come from the milestone stages you tick.`;
@@ -1128,9 +1140,9 @@ function renderTheory(){
     el.dataset.built = '1';
     el.querySelectorAll('details').forEach(d => d.addEventListener('toggle', () => { if (d.open) { const ill = d.querySelector('[data-ill]'); if (ill && !ill.dataset.drawn) { ill.dataset.drawn='1'; const t = TOPICS.find(x=>x.id===d.dataset.topic); whenVF(()=>drawStave(ill, t.stave)); } } }));
   }
-  TOPICS.forEach(t => { const sc = topicScore(t.id); const st = statusOf(sc); el.querySelector(`[data-pct="${t.id}"]`).textContent = sc.n ? Math.round(sc.score)+'%' : '–'; el.querySelector(`[data-bar="${t.id}"]`).style.width = Math.round(sc.score)+'%';
+  TOPICS.forEach(t => { const sc = topicScore(t.id); const st = statusOf(sc); el.querySelector(`[data-pct="${t.id}"]`).innerHTML = sc.n ? (sc.acc!=null?`<span class="small muted">${Math.round(100*sc.acc)}% correct</span> · `:'') + Math.round(sc.score)+'%' : '–'; el.querySelector(`[data-bar="${t.id}"]`).style.width = Math.round(sc.score)+'%';
     const tag = el.querySelector(`[data-status="${t.id}"]`); tag.textContent = st[0]; tag.className = 'tag ' + st[1];
-    el.querySelector(`[data-acc="${t.id}"]`).textContent = sc.n ? `${sc.n} questions in the last 30 days, ${Math.round(100*sc.acc)}% correct${sc.basis==='mixed'?' (self-assessment still part of the score)':''}` : 'No drills yet — the score is 60% of your starting self-assessment.';
+    el.querySelector(`[data-acc="${t.id}"]`).textContent = sc.n ? `Accuracy ${Math.round(100*sc.acc)}% over ${sc.n} questions (30 days). Readiness ${Math.round(sc.score)}% is the Grade-5 weighted score — questions done at Foundation level count at 75%${sc.nx<6?', so do some at Exam level to lift it':''}.${sc.basis==='mixed'?' Self-assessment is still part of the score.':''}` : 'No drills yet — the score is 60% of your starting self-assessment.';
     el.querySelector(`[data-subs="${t.id}"]`).innerHTML = t.subs.map(s => { const book = /\(book\)|\(practice papers\)/.test(s); const name = s.replace(/ \((book|practice papers)\)/,''); if (book) { const cov = !!(S.covered[t.id+'|'+name]); return `<div class="score"><span>${esc(name)} <span class="small muted">— written work in your book / with teacher</span></span><span class="n"></span><label class="row small" style="gap:6px"><input type="checkbox" data-covered="${esc(t.id+'|'+name)}" ${cov?'checked':''}> covered</label></div>`; }
       const sc2 = subScore(s); return scoreRow(esc(s), sc2, `<button type="button" class="linkbtn small" data-subdrill="${t.id}" data-sub="${esc(s)}">drill 10</button>`); }).join(''); });
   $('#theoryAvg').textContent = Math.round(theoryPct())+'%'; $('#theoryBar').style.width = Math.round(theoryPct())+'%';
@@ -1143,6 +1155,7 @@ function renderLevel(){ const lv = S.settings.level || 'foundation'; T.setLevel(
   $('#levelNote').textContent = lv==='foundation' ? 'Keys to 5♯/♭, treble/bass/alto clefs, simple intervals (major/minor/perfect), chords I, IV, V mostly in root position, no irregular time. Switch to Exam when foundation drills are consistently 12+/15.' : 'Full Grade 5 scope: tenor clef, 6♯/♭, compound and augmented/diminished intervals, chord II and inversions, irregular time, transposing instruments, French and German terms.'; }
 function renderTestsHome(){
   EV = evidence(); renderLevel();
+  const nudge = $('#examNudge'); if (nudge) { const ready = foundationReady(); nudge.hidden = !ready; if (ready) { const strong = TOPICS.filter(t=>{ const sc=topicScore(t.id); return sc.n>=8 && (sc.acc!=null?sc.acc:0)>=0.85; }).map(t=>t.name); $('#examNudgeText').textContent = `Aryav is scoring 85%+ at Foundation level on ${strong.length} topic${strong.length>1?'s':''} (${strong.slice(0,3).join(', ')}${strong.length>3?'…':''}). Those high marks only lift his readiness score once he answers them at Grade 5 level. Switch to Exam to start banking real Grade-5 evidence.`; } }
   const sel = $('#topicPick'); if (!sel.options.length) sel.innerHTML = TOPICS.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
   const list = tests.slice(0,12).reverse();
   $('#hist').innerHTML = list.map(t=>{ const p = Math.round(100*t.score/t.total); return `<i class="${p<67?'fail':''} ${t.level!=='exam'?'found':''}" style="height:${Math.max(3,p)}%" title="${p}% (${t.level==='exam'?'exam':'foundation'} level)"></i>`; }).join('') || '<span class="small muted">No tests yet.</span>';
