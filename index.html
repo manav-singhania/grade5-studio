@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-13.1029';</script>
+<script>window.__G5_BUILD__='2026-10-18.0202';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -146,6 +146,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
     <div class="eyebrow">ABRSM Grade 5 · Piano</div>
     <h1 id="title">Grade 5 Studio</h1>
     <p class="muted small" id="subtitle">Theory online · Practical face-to-face <span id="syncStatus"></span></p>
+    <button type="button" class="btn sm" id="syncNow" style="margin-top:6px">↻ Sync now</button>
   </div>
   <div class="chips">
     <span class="chip">Theory exam <b id="dTheory">–</b> days</span>
@@ -1265,6 +1266,15 @@ document.addEventListener('click', e => {
   if (b.id==='quitTest' && run) { finishTest(); return; }
   if (b.id==='showWork' && run) { showWorking(run.qs[run.i]); return; }
   if (b.id==='doneBack') { backToTests(); return; }
+  if (b.id==='syncNow') {
+    try { if (typeof setSyncStatus==='function') setSyncStatus('Refreshing…'); } catch(e){}
+    try { if (typeof flushOutbox==='function') flushOutbox(); } catch(e){}
+    try { if (typeof checkVersion==='function') checkVersion(); } catch(e){}
+    const ready = (typeof pullAll==='function') && (typeof syncReady!=='function' || syncReady());
+    if (ready) { pullAll(true).then(()=>{ renderAll(); toast('Up to date'); }).catch(()=>{ try { if (typeof setSyncStatus==='function') setSyncStatus('Could not reach the server — tap Sync now again in a moment'); } catch(e){} toast('Could not reach the server'); }); }
+    else { renderAll(); try { if (typeof setSyncStatus==='function') setSyncStatus('Saving on this device — enter the family key to sync'); } catch(e){} toast('Refreshed'); }
+    return;
+  }
   if (b.id==='keyConnect') { tryKey($('#keyInput').value); return; }
   if (b.id==='copyReport') { copyReport(); return; }
   if (b.id==='replan') { const d = todayISO(); const cur = logs[d] || {date:d, done:[]}; const rec = { date:d, done: cur.done||[] }; logs[d] = rec; todayFrozen = false; if (db) db.collection('log').doc(d).set(rec).catch(()=>{}); else lsSet('g5:logs', logs); renderToday(); toast('Today re-planned'); return; }
