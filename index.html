@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-18.0218';</script>
+<script>window.__G5_BUILD__='2026-10-19.0237';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1086,7 +1086,10 @@ function renderToday(){
   EV = evidence();
   const phase1 = daysTo(S.settings.theoryDate) > 0; const mins = Number(S.settings.mins)||50; const date = todayISO(); const dow = new Date().getDay();
   const order = TOPICS.slice().sort((a,b)=> (topicScore(a.id).score - (a.isNew?8:0)) - (topicScore(b.id).score - (b.isNew?8:0)));
-  const learn = order[0];
+  // Rotate the day's lesson through the weakest handful so each day is different (the weak-spot drill still targets the single weakest daily).
+  const dayNum = Math.round(new Date(date).getTime()/86400000) || 0;
+  const learnPool = order.slice(0, Math.min(5, order.length));
+  const learn = learnPool[dayNum % learnPool.length] || order[0];
   const scalesTodo = SCALE_GROUPS.flatMap(g=>g.items).filter(i=>(S.scales[i[0]]||0)<3); const scaleNames = scalesTodo.slice(0,3).map(i=>i[1]).join(', ') || 'maintenance: run all 28 items';
   const weakestPiece = PIECES.slice().sort((a,b)=>(S.pieces[a.id]||0)-(S.pieces[b.id]||0))[0];
   const items = [];
