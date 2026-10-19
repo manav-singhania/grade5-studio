@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-19.0237';</script>
+<script>window.__G5_BUILD__='2026-10-19.0343';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -955,6 +955,7 @@ const AURAL = [
 ];
 const TOPIC_WEIGHT = {t1:1,t2:1.2,t3:1.2,t4:.6,t5:1.3,t6:.8,t7:1.3,t8:1,t9:.8,t10:1,t11:1.2};
 const FOUND_CAP = 0.75;
+const PLAN_VERSION = 2; // bump when the daily-plan logic changes, so a frozen plan from an older build auto-refreshes
 
 /* ---------- State ---------- */
 const DEFAULT = {
@@ -1113,8 +1114,10 @@ function renderToday(){
     $('#lessonNote').innerHTML = `<b>Lessons:</b> ${esc(S.settings.lesson2)}. Use lessons for a mock exam run every 3–4 weeks: all three pieces, scales called at random, sight-reading, aural.`;
   }
   let plan = items;
-  if (logs[date] && Array.isArray(logs[date].plan) && logs[date].plan.length) plan = logs[date].plan;
-  else if (!todayFrozen) { todayFrozen = true; const rec = { date, done: (logs[date]&&logs[date].done)||[], plan: items.map(it=>({k:it.k, t:it.t, m:it.m, d:it.d, acts:it.acts||[]})), phase: phase1?1:2 }; logs[date] = rec; if (db) db.collection('log').doc(date).set(rec).catch(()=>{}); else lsSet('g5:logs', logs); }
+  const stored = logs[date];
+  const fresh = stored && Array.isArray(stored.plan) && stored.plan.length && stored.pv === PLAN_VERSION;
+  if (fresh) plan = stored.plan;
+  else if (!todayFrozen || !fresh) { todayFrozen = true; const rec = { date, done: (stored&&stored.done)||[], plan: items.map(it=>({k:it.k, t:it.t, m:it.m, d:it.d, acts:it.acts||[]})), phase: phase1?1:2, pv: PLAN_VERSION }; logs[date] = rec; if (db) db.collection('log').doc(date).set(rec).catch(()=>{}); else lsSet('g5:logs', logs); }
   const done = (logs[date] && logs[date].done) || [];
   $('#todayList').innerHTML = plan.map(it => `<div class="today-item"><span class="mins">${it.m}′</span><span><b>${esc(it.t)}</b><br><span class="small muted">${esc(it.d)}</span>${it.acts?`<span class="acts">${it.acts.map(a=> a.href ? `<a href="${esc(a.href)}" target="_blank" rel="noopener" class="${a.sec?'sec':''}">${esc(a.label)}</a>` : `<button type="button" class="${a.sec?'sec':''}" ${a.start?`data-start="${a.start}" data-starttopic="${a.topic||''}" data-startsub="${esc(a.sub||'')}"`:''} ${a.topic&&!a.start?`data-opentopic="${a.topic}"`:''} ${a.section?`data-section="${a.section}"`:''} ${a.tool?`data-tool="${a.tool}"`:''}>${esc(a.label)}</button>`).join('')}</span>`:''}</span><input type="checkbox" data-done="${it.k}" ${done.includes(it.k)?'checked':''} aria-label="Done"></div>`).join('');
   $('#todayTitle').textContent = `Today · ${mins} minutes`;
