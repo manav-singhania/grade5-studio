@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-19.0343';</script>
+<script>window.__G5_BUILD__='2026-10-20.0307';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -191,6 +191,13 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
         <div id="priorities" class="stack"></div>
       </div>
     </div>
+  </div>
+  <div class="card stack" id="commentCard" style="margin-top:14px">
+    <div class="eyebrow">Notes for Dad</div>
+    <p class="small muted">Write a question, something your teacher showed you, or how it’s going. Dad reads these and adjusts your plan — they don’t change your tasks on their own.</p>
+    <textarea id="commentInput" placeholder="Type a note to Dad…" style="width:100%;height:76px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg)"></textarea>
+    <div class="row between"><button type="button" class="btn primary sm" id="commentSend">Send to Dad</button><span class="small muted" id="commentStatus"></span></div>
+    <div id="commentList" class="stack" style="gap:6px"></div>
   </div>
 </section>
 
@@ -965,7 +972,7 @@ const DEFAULT = {
   settings:{name:'', theoryDate:'2026-11-30', pracDate:'2027-04-01', mins:50, level:'foundation', goal:'distinction', travel:[['2026-12-02','2026-12-24']], lesson1:'2 × 30 min a week (theory + practical)', lesson2:'1 × 60 min a week (practical)'}
 };
 let S = JSON.parse(JSON.stringify(DEFAULT));
-let tests = []; let logs = {}; let videos = {}; let practice = {}; let todayFrozen = false;
+let tests = []; let logs = {}; let videos = {}; let practice = {}; let comments = {}; let todayFrozen = false;
 let db = null; let storeKind = 'memory';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } };
 const lsSet = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
@@ -1083,6 +1090,8 @@ function renderAll(){ EV = evidence(); renderHeader(); renderToday(); renderTheo
 function renderHeader(){ $('#title').textContent = S.settings.name ? S.settings.name + ' · Grade 5' : 'Grade 5 Studio'; $('#dTheory').textContent = daysTo(S.settings.theoryDate); $('#dPrac').textContent = daysTo(S.settings.pracDate); }
 function scoreRow(label, sc, extra){ const st = statusOf(sc); const v = sc ? Math.round(sc.score) : 0; const accTxt = (sc && sc.n && sc.acc!=null) ? `<span class="small muted" title="Raw % correct">${Math.round(sc.acc*100)}% correct</span>` : ''; return `<div class="score"><span>${label}${extra?` <span class="small muted">${extra}</span>`:''}</span><span class="n">${sc&&sc.n?`n=${sc.n}${sc.nx?` (${sc.nx} exam)`:''}`:'not yet drilled'}</span><span class="row" style="gap:6px">${accTxt}<span class="tag ${st[1]}">${st[0]}</span><span class="pct" title="Grade-5 readiness score">${sc&&sc.n?v+'%':'–'}</span></span><div class="bar thin"><i style="width:${v}%"></i></div></div>`; }
 
+function sendComment(){ const el = $('#commentInput'); if (!el) return; const text = (el.value||'').trim(); if (!text) return; const id = String(Date.now()); const rec = { ts: Date.now(), text }; comments[id] = rec; lsSet('g5:comments', comments); if (db) db.collection('comments').doc(id).set(rec).catch(()=>{}); el.value=''; const s = $('#commentStatus'); if (s) { s.textContent = 'Sent to Dad ✓'; setTimeout(()=>{ if ($('#commentStatus')) $('#commentStatus').textContent=''; }, 4000); } renderComments(); toast('Sent to Dad'); }
+function renderComments(){ const el = $('#commentList'); if (!el) return; const list = Object.values(comments).sort((a,b)=>b.ts-a.ts).slice(0,8); el.innerHTML = list.length ? `<div class="small muted" style="margin-top:4px">Your recent notes (${Object.keys(comments).length}):</div>` + list.map(c=>`<div class="lesson small"><span class="muted">${new Date(c.ts).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><br>${esc(c.text)}</div>`).join('') : ''; }
 function renderToday(){
   EV = evidence();
   const phase1 = daysTo(S.settings.theoryDate) > 0; const mins = Number(S.settings.mins)||50; const date = todayISO(); const dow = new Date().getDay();
@@ -1129,6 +1138,7 @@ function renderToday(){
   const practicalPri = [['Pieces',piecesPct()],['Scales & arpeggios',scalesPct()],['Sight-reading',srPct()],['Aural',auralPct()]].sort((a,b)=>a[1]-b[1]).slice(0,2).map(([n,v])=>`<div class="row between"><span>${n}</span><span class="pct">${Math.round(v)}%</span></div>`);
   $('#priorities').innerHTML = pr3.concat(practicalPri).join('');
   const cn = $('#claudeNoteBox'); if (cn) { const note = (typeof claudeNote !== 'undefined') ? claudeNote : null; if (note && note.text) { cn.hidden = false; cn.innerHTML = `<b>Note from Claude${note.date?' · '+esc(note.date):''}:</b> ${esc(note.text)}`; } else cn.hidden = true; }
+  renderComments();
 }
 
 function renderTheory(){
@@ -1294,6 +1304,7 @@ document.addEventListener('click', e => {
     else { renderAll(); try { if (typeof setSyncStatus==='function') setSyncStatus('Saving on this device — enter the family key to sync'); } catch(e){} toast('Refreshed'); }
     return;
   }
+  if (b.id==='commentSend') { sendComment(); return; }
   if (b.id==='keyConnect') { tryKey($('#keyInput').value); return; }
   if (b.id==='copyReport') { copyReport(); return; }
   if (b.id==='replan') { const d = todayISO(); const cur = logs[d] || {date:d, done:[]}; const rec = { date:d, done: cur.done||[] }; logs[d] = rec; todayFrozen = false; if (db) db.collection('log').doc(d).set(rec).catch(()=>{}); else lsSet('g5:logs', logs); renderToday(); toast('Today re-planned'); return; }
@@ -1444,9 +1455,10 @@ function applyDocs(docs){
     else if (col === 'log') { logs[id] = data; changed = true; }
     else if (col === 'practice') { practice[id] = data; changed = true; }
     else if (col === 'resources') { videos[id] = data; changed = true; }
+    else if (col === 'comments') { comments[id] = data; changed = true; }
     else if (path === 'notes/claude') { claudeNote = data; changed = true; }
   });
-  if (changed) { tests.sort((a,b)=>b.ts-a.ts); lsSet('g5:tests', tests); lsSet('g5:logs', logs); lsSet('g5:practice', practice); lsSet('g5:videos', videos); }
+  if (changed) { tests.sort((a,b)=>b.ts-a.ts); lsSet('g5:tests', tests); lsSet('g5:logs', logs); lsSet('g5:practice', practice); lsSet('g5:videos', videos); lsSet('g5:comments', comments); }
   return changed;
 }
 async function pullAll(initial){
@@ -1505,7 +1517,7 @@ setInterval(()=>{ if (document.hidden) return; if (Date.now() - lastInteraction 
 function flushTime(){ if (!timeDirty) return; timeDirty = false; const d = todayISO(); practice[d] = practice[d] || {date:d, sr:[], aural:{}}; const t = practice[d].time || {}; Object.entries(timeAcc).forEach(([k,v])=>{ t[k] = (t[k]||0) + v; }); timeAcc = {}; practice[d].time = t; practice[d].lastActive = Date.now(); lsSet('g5:practice', practice); if (db) db.collection('practice').doc(d).set(practice[d]).catch(()=>{}); }
 setInterval(flushTime, 60000); document.addEventListener('visibilitychange', ()=>{ if (document.hidden) flushTime(); }); window.addEventListener('pagehide', flushTime);
 
-function bootStandalone(){ const local = lsGet('g5:state/main'); if (local) S = migrate(merge(S, local)); tests = lsGet('g5:tests')||[]; logs = lsGet('g5:logs')||{}; videos = lsGet('g5:videos')||{}; practice = lsGet('g5:practice')||{}; renderAll(); initSync(); if (!syncReady()) loadUpdates(); }
+function bootStandalone(){ const local = lsGet('g5:state/main'); if (local) S = migrate(merge(S, local)); tests = lsGet('g5:tests')||[]; logs = lsGet('g5:logs')||{}; videos = lsGet('g5:videos')||{}; practice = lsGet('g5:practice')||{}; comments = lsGet('g5:comments')||{}; renderAll(); initSync(); if (!syncReady()) loadUpdates(); }
 
 try { const t = localStorage.getItem('g5:tab'); if (t) showTab(t); } catch(e){}
 bootStandalone();

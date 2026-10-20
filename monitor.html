@@ -154,6 +154,7 @@ html,body{margin:0}[hidden]{display:none!important}
   <textarea id="reportBox" hidden style="font:12px ui-monospace,monospace;min-height:160px"></textarea>
   <div class="ring" id="kpis"></div>
   <div class="card stack"><div class="eyebrow">Flags</div><div class="stack" style="gap:6px" id="alerts"></div></div>
+  <div class="card stack" id="commentsCard"><div class="row between"><h3>Comments from Aryav <span class="tag" id="commentsUnread" hidden></span></h3><button class="btn sm" id="markCommentsRead" hidden>Mark all read</button></div><p class="small muted">His own notes from the app. These are for you to read — the plan never changes automatically from them.</p><div class="stack" style="gap:6px" id="commentsList"></div></div>
   <div class="grid g2">
     <div class="card stack"><div class="row between"><h3>Consistency</h3></div><div class="strip" id="strip"></div><p class="small muted" id="consistency"></p><div class="eyebrow">Missed items (last 14 days)</div><div class="stack" style="gap:4px" id="missed"></div></div>
     <div class="card stack"><h3>Theory trend by week</h3><div id="trend"></div><div class="eyebrow" style="margin-top:6px">Full mocks</div><div class="tbl"><table><tbody id="mockRows"></tbody></table></div></div>
@@ -267,7 +268,7 @@ const DEFAULT = {
   settings:{name:'', theoryDate:'2026-11-30', pracDate:'2027-04-01', mins:50, level:'foundation', goal:'distinction', travel:[['2026-12-02','2026-12-24']], lesson1:'2 × 30 min a week (theory + practical)', lesson2:'1 × 60 min a week (practical)'}
 };
 let S = JSON.parse(JSON.stringify(DEFAULT));
-let tests = []; let logs = {}; let videos = {}; let practice = {}; let todayFrozen = false;
+let tests = []; let logs = {}; let videos = {}; let practice = {}; let comments = {}; let todayFrozen = false;
 let db = null; let storeKind = 'memory';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } };
 const lsSet = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
@@ -385,7 +386,7 @@ function adaptiveAlloc(n){ n = n||16; const top = weakBuckets().slice(0,8); if (
 <script>
 /* ===================== Parent monitor ===================== */
 const SYNC = { url: (typeof G5_SYNC_URL !== 'undefined' ? G5_SYNC_URL : ''), key: '', lastNow: 0, timer: null, busy: false };
-let parentNotes = null;
+let parentNotes = null; let commentsReadTs = 0;
 const lsGetM = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } };
 const lsSetM = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
 async function rpc(body){ const r = await fetch(SYNC.url, { method:'POST', body: JSON.stringify({ key: SYNC.key, ...body }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error || 'sync error'); return j; }
@@ -393,6 +394,8 @@ function applyDocs(docs){ Object.entries(docs).forEach(([path, data]) => { if (!
   if (path === 'state/main') S = migrate(merge(JSON.parse(JSON.stringify(DEFAULT)), data));
   else if (col === 'tests') { const i = tests.findIndex(t=>t.id===id); const rec = {id, ...data}; if (i>=0) tests[i] = rec; else tests.push(rec); }
   else if (col === 'log') logs[id] = data; else if (col === 'practice') practice[id] = data; else if (col === 'resources') videos[id] = data;
+  else if (col === 'comments') comments[id] = data;
+  else if (path === 'parent/commentsRead') commentsReadTs = Number((data&&data.ts)||0);
   else if (path === 'parent/notes') parentNotes = data; }); tests.sort((a,b)=>b.ts-a.ts); }
 async function pull(initial){ if (SYNC.busy) return; SYNC.busy = true; try { const j = await rpc({ op:'list', since: initial ? 0 : Math.max(0, SYNC.lastNow - 5000) }); applyDocs(j.docs||{}); SYNC.lastNow = Math.max(SYNC.lastNow, Number(j.now||0)); EV = evidence(); render(); $('#syncStatus').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); } catch(e){ $('#syncStatus').textContent = 'Could not reach the sync service'; } finally { SYNC.busy = false; } }
 async function connect(k){ SYNC.key = k.trim(); try { const j = await rpc({ op:'whoami' }); if (j.role !== 'parent') { $('#gateMsg').textContent = 'That is not the parent key.'; SYNC.key=''; return; } lsSetM('g5:parentKey', SYNC.key); $('#keyGate').hidden = true; $('#main').hidden = false; await pull(true); clearInterval(SYNC.timer); SYNC.timer = setInterval(()=>pull(false), 60000); document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) pull(false); }); } catch(e){ $('#gateMsg').textContent = 'Key not accepted.'; SYNC.key=''; } }
@@ -436,8 +439,14 @@ function teacherBrief(){
 
 /* ---------- render ---------- */
 function bar(v, cls){ return `<div class="bar thin"><i class="${cls||''}" style="width:${Math.max(0,Math.min(100,Math.round(v)))}%"></i></div>`; }
+function renderMonitorComments(){ const el = $('#commentsList'); if (!el) return; const list = Object.values(comments).sort((a,b)=>b.ts-a.ts); const unread = list.filter(c=>c.ts>commentsReadTs).length;
+  const badge = $('#commentsUnread'); if (badge) { badge.hidden = unread===0; badge.className = 'tag ' + (unread?'bad':''); badge.textContent = unread?`${unread} new`:''; }
+  const mr = $('#markCommentsRead'); if (mr) mr.hidden = unread===0;
+  el.innerHTML = list.length ? list.slice(0,40).map(c=>`<div class="lesson small" style="${c.ts>commentsReadTs?'border-color:var(--accent)':''}"><span class="muted">${new Date(c.ts).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}${c.ts>commentsReadTs?' · <b style="color:var(--accent)">new</b>':''}</span><br>${esc(c.text)}</div>`).join('') : '<p class="small muted">No comments yet.</p>'; }
+function markCommentsRead(){ const ts = Math.max(0, ...Object.values(comments).map(c=>c.ts||0)); commentsReadTs = ts; rpc({op:'set', path:'parent/commentsRead', data:{ts}}).then(()=>renderMonitorComments()).catch(()=>renderMonitorComments()); }
 function render(){
   const name = S.settings.name || 'Student'; $('#title').textContent = name + ' · parent monitor';
+  renderMonitorComments();
   const m = mockStats(); const tr = theoryReadiness(), pr = practicalReadiness();
   $('#kpis').innerHTML = [['Theory readiness', Math.round(tr)+'%', `${daysTo(S.settings.theoryDate)} days to exam`],['Practical readiness', Math.round(pr)+'%', `${daysTo(S.settings.pracDate)} days to exam`],['Exam-level mocks', m.exam===null?'–':Math.round(m.exam)+'%', m.exam===null?'none yet':'pass line 67%'],['Practice streak', streak()+' d', 'consecutive days with activity']].map(([k,v,s])=>`<div class="card"><div class="eyebrow">${k}</div><div class="kpi">${v}</div><div class="small muted">${s}</div></div>`).join('');
   $('#alerts').innerHTML = alerts().map(([c,t])=>`<div class="alert ${c}">${esc(t)}</div>`).join('');
@@ -495,9 +504,9 @@ function setFlag(k, v){ S.settings[k] = v; rpc({op:'set', path:'state/main', dat
 function saveSettings(){ S.settings = S.settings||{}; const g = id=>{ const el=$('#'+id); return el?el.value:''; }; S.settings.theoryDate = g('mTheory')||S.settings.theoryDate; S.settings.pracDate = g('mPrac')||S.settings.pracDate; const mv=Number(g('mMins')); if (mv) S.settings.mins = mv; const a=g('mTravelA'), b=g('mTravelB'); S.settings.travel = (a&&b)?[[a,b]]:[]; rpc({op:'set', path:'state/main', data:S}).then(()=>{ $('#setStatus').textContent='Saved · synced to Aryav'; render(); }).catch(()=>{ $('#setStatus').textContent='Could not save'; }); }
 document.addEventListener('change', e => { const c = e.target.closest('[data-flag]'); if (c) setFlag(c.dataset.flag, c.checked); });
 function saveNotes(){ const text = $('#parentNotes').value; parentNotes = {text, updated: new Date().toISOString()}; rpc({op:'set', path:'parent/notes', data: parentNotes}).then(()=>{ $('#notesStatus').textContent = 'Saved'; }).catch(()=>{ $('#notesStatus').textContent = 'Could not save'; }); }
-function reportForClaude(){ EV = evidence(); const L = [`PARENT MONITOR — ${iso(new Date())} — ${S.settings.name||''}`]; alerts().forEach(a=>L.push('! '+a[1])); L.push('Streak '+streak()+' d'); L.push('Theory: '+TOPICS.map(t=>{ const sc = topicScore(t.id); return `${t.id} ${sc.n?Math.round(sc.score)+'%':'-'}(${sc.n})`; }).join(' ')); const m = mockStats(); L.push(`Mocks exam ${m.exam===null?'-':Math.round(m.exam)+'%'} found ${m.found===null?'-':Math.round(m.found)+'%'}`); tests.slice(0,10).forEach(t=>L.push(` ${iso(new Date(t.ts))} ${t.mode} ${t.level||'?'} ${t.score}/${t.total}${t.sub?' '+t.sub:''}`)); L.push('Sub-areas: '+Object.entries(EV.SUB).map(([k,e])=>`${k} ${Math.round(100*e.wr/e.n)}%(${e.n})`).join('; ')); L.push('SR: '+SR_AREAS.map(([n,f])=>{ const sc = srAreaScore(f); return `${n} ${sc?Math.round(sc.score)+'%('+sc.n+')':'-'}`; }).join('; ')); L.push('Aural: '+AURAL.map(a=>{ const sc=auralScore(a.id); return `${a.id} ${sc?Math.round(sc.score)+'%('+sc.n+')':'-'}`; }).join(' ')); L.push('Pieces '+PIECES.map(p=>p.list+':'+(S.pieces[p.id]||0)).join(' ')+' · scales '+Math.round(scalesPct())+'%'); L.push('Log: '+lastDays(14).map(d=>{ const s = dayStat(d); const tm = Object.values((practice[d]||{}).time||{}).reduce((x,y)=>x+y,0); return d.slice(5)+(s?`=${s.dn}/${s.n}`:'=·')+(tm?`/${Math.round(tm/60)}m`:''); }).join(' ')); if (parentNotes&&parentNotes.text) L.push('Parent notes: '+parentNotes.text); const txt = L.join('\n');
+function reportForClaude(){ EV = evidence(); const L = [`PARENT MONITOR — ${iso(new Date())} — ${S.settings.name||''}`]; alerts().forEach(a=>L.push('! '+a[1])); L.push('Streak '+streak()+' d'); L.push('Theory: '+TOPICS.map(t=>{ const sc = topicScore(t.id); return `${t.id} ${sc.n?Math.round(sc.score)+'%':'-'}(${sc.n})`; }).join(' ')); const m = mockStats(); L.push(`Mocks exam ${m.exam===null?'-':Math.round(m.exam)+'%'} found ${m.found===null?'-':Math.round(m.found)+'%'}`); tests.slice(0,10).forEach(t=>L.push(` ${iso(new Date(t.ts))} ${t.mode} ${t.level||'?'} ${t.score}/${t.total}${t.sub?' '+t.sub:''}`)); L.push('Sub-areas: '+Object.entries(EV.SUB).map(([k,e])=>`${k} ${Math.round(100*e.wr/e.n)}%(${e.n})`).join('; ')); L.push('SR: '+SR_AREAS.map(([n,f])=>{ const sc = srAreaScore(f); return `${n} ${sc?Math.round(sc.score)+'%('+sc.n+')':'-'}`; }).join('; ')); L.push('Aural: '+AURAL.map(a=>{ const sc=auralScore(a.id); return `${a.id} ${sc?Math.round(sc.score)+'%('+sc.n+')':'-'}`; }).join(' ')); L.push('Pieces '+PIECES.map(p=>p.list+':'+(S.pieces[p.id]||0)).join(' ')+' · scales '+Math.round(scalesPct())+'%'); L.push('Log: '+lastDays(14).map(d=>{ const s = dayStat(d); const tm = Object.values((practice[d]||{}).time||{}).reduce((x,y)=>x+y,0); return d.slice(5)+(s?`=${s.dn}/${s.n}`:'=·')+(tm?`/${Math.round(tm/60)}m`:''); }).join(' ')); const cl = Object.values(comments).sort((a,b)=>b.ts-a.ts).slice(0,12); if (cl.length) { L.push('COMMENTS FROM ARYAV (newest first):'); cl.forEach(c=>L.push(` ${iso(new Date(c.ts))}: ${c.text}`)); } if (parentNotes&&parentNotes.text) L.push('Parent notes: '+parentNotes.text); const txt = L.join('\n');
   const done = () => { $('#reportStatus').textContent = 'Copied — paste it to Claude'; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(()=>{ $('#reportBox').hidden=false; $('#reportBox').value = txt; }); else { $('#reportBox').hidden=false; $('#reportBox').value = txt; } }
-document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.id==='keyConnect') connect($('#keyInput').value); if (b.id==='saveNotes') saveNotes(); if (b.id==='copyReport') reportForClaude(); if (b.id==='refresh') pull(false); if (b.id==='saveSettings') saveSettings(); });
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.id==='keyConnect') connect($('#keyInput').value); if (b.id==='saveNotes') saveNotes(); if (b.id==='copyReport') reportForClaude(); if (b.id==='refresh') pull(false); if (b.id==='saveSettings') saveSettings(); if (b.id==='markCommentsRead') markCommentsRead(); });
 (function(){ const k = lsGetM('g5:parentKey'); if (k) { $('#keyInput').value = k; connect(k); } })();
 
 </script>
