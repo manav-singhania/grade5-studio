@@ -1,6 +1,6 @@
 # Frontier
 
-A daily wall of science for Aryav. Static site; nothing here links out of the page.
+A daily wall of high-school science for Aryav. Static site; nothing here links out of the page.
 
 - `index.html` — the wall. Loads `wall.json` (or `wall-draft.json` with `?draft=1`).
 - `wall.json` — today's edition: tiles, deep-dive layers, related hops, week ticker. Written by Claude each morning after a source check.
