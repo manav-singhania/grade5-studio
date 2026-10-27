@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-23.0941';</script>
+<script>window.__G5_BUILD__='2026-10-27.2331';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -290,7 +290,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
       </div>
     </div>
     <div id="testRun" class="stack" hidden>
-      <div class="row between"><div><span class="eyebrow" id="runLabel">Question</span><h3 id="runCount">1 / 30</h3></div><div class="row"><span class="pct" id="runScore">0 correct</span><button class="btn sm" id="quitTest">End test</button></div></div>
+      <div class="row between"><div><span class="eyebrow" id="runLabel">Question</span><h3 id="runCount">1 / 30</h3></div><div class="row"><span class="tag" id="runClock" hidden title="Time on this mock — the real paper is 2 hours">0:00</span><span class="pct" id="runScore">0 correct</span><button class="btn sm" id="quitTest">End test</button></div></div>
       <div class="bar thin"><i id="runBar" style="width:0%"></i></div>
       <div class="card stack">
         <div class="row between"><span class="tag" id="qTopic"></span><span class="small muted" id="qSub"></span></div>
@@ -1268,7 +1268,9 @@ function renderSettings(){ $('#sName').value = S.settings.name||''; $('#sTheory'
 let run = null;
 function startTest(mode, topic, sub){
   T.setLevel(S.settings.level||'foundation'); const w = weakWeights(); if (sub) w.__sub = sub; if (mode==='weak') w.__alloc = adaptiveAlloc(16); if (mode==='review') w.__topics = seenTopics(); const qs = T.buildTest(mode, topic, w);
-  run = { mode, topic, sub, qs, i:0, score:0, byTopic:{}, bySub:{}, answered:false };
+  run = { mode, topic, sub, qs, i:0, score:0, byTopic:{}, bySub:{}, answered:false, level: S.settings.level||'foundation', t0: Date.now() };
+  clearInterval(window.__mockClock); const clk = $('#runClock'); if (clk) { clk.hidden = mode!=='mock'; clk.textContent = '0:00'; }
+  if (mode==='mock') window.__mockClock = setInterval(()=>{ if (!run) { clearInterval(window.__mockClock); return; } const s = Math.floor((Date.now()-run.t0)/1000); const c = $('#runClock'); if (c) c.textContent = `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }, 1000);
   $('#testHome').hidden = true; $('#testDone').hidden = true; $('#testRun').hidden = false;
   $('#runLabel').textContent = ((S.settings.level||'foundation')==='exam' ? 'Exam level · ' : 'Foundation level · ') + (mode==='mock' ? 'Full mock' : mode==='weak' ? 'Weak-spot drill' : mode==='review' ? 'Mixed recall' : mode==='quick' ? 'Sync check' : mode==='sub' ? sub : 'Topic drill: ' + TOPICS.find(t=>t.id===topic).name);
   showQ();
@@ -1294,12 +1296,13 @@ function showWorking(q){ const w = $('#qWork'); w.hidden = false; $('#showWork')
   q.explainStaves.forEach((e,i)=> whenVF(()=>drawStave(w.querySelector(`[data-work="${i}"]`), e.spec))); }
 function finishTest(){
   const total = run.i + (run.answered?1:0); if (!total) { backToTests(); return; }
-  const rec = { ts: Date.now(), mode: run.mode, topic: run.topic||null, sub: run.sub||null, score: run.score, total, byTopic: run.byTopic, bySub: run.bySub, level: S.settings.level||'foundation' };
+  const rec = { ts: Date.now(), mode: run.mode, topic: run.topic||null, sub: run.sub||null, score: run.score, total, byTopic: run.byTopic, bySub: run.bySub, level: run.level || S.settings.level || 'foundation', secs: Math.round((Date.now()-(run.t0||Date.now()))/1000) };
+  clearInterval(window.__mockClock);
   const id = 't' + rec.ts;
   tests.unshift({id, ...rec}); lsSet('g5:tests', tests); if (db) db.collection('tests').doc(id).set(rec).catch(e=>toast('Could not save test: '+(e.code||'')));
   const pct = Math.round(100*rec.score/rec.total);
   const weak = Object.entries(rec.bySub).filter(([k,v])=>v.n && v.r<v.n).sort((a,b)=>(a[1].r/a[1].n)-(b[1].r/b[1].n)).slice(0,3);
-  $('#doneHead').textContent = `${rec.score} / ${rec.total} — ${pct}%`;
+  $('#doneHead').textContent = `${rec.score} / ${rec.total} — ${pct}%` + (run.mode==='mock' ? ` · ${Math.floor(rec.secs/60)} min ${rec.secs%60} s` : '');
   $('#doneBody').innerHTML = `<p>${run.mode==='mock' ? (rec.level!=='exam' ? 'Foundation-level mock: a check that the Grade 3–4 base is there. It does not count towards the exam projection.' : pct>=87?'Distinction territory (65/75 = 87%).':pct>=80?'Merit territory (60/75 = 80%).':pct>=67?'Pass territory (50/75 = 67%) — keep pushing the weak targets.':'Below the pass line (67%). The sub-area scores tell you exactly where tomorrow’s 20 minutes go.') : 'Logged. Scores by sub-area update in Theory and Mock Tests.'}</p>${weak.length?`<div><div class="eyebrow">Revise first</div><ul class="facts">${weak.map(([k,v])=>`<li>${esc(k)} — ${v.r}/${v.n}</li>`).join('')}</ul></div>`:''}`;
   $('#testRun').hidden = true; $('#testDone').hidden = false; run = null;
   markDone('drill', true, true); if (!db) { EV = evidence(); renderTestsHome(); renderTheory(); renderToday(); }
@@ -1322,7 +1325,7 @@ document.addEventListener('click', e => {
   const sd = b.closest('[data-seed]'); if (sd) { S.seed[sd.dataset.seed] = Number(b.dataset.v); saveState(); renderSettings(); renderTheory(); renderToday(); return; }
   const pc = b.closest('[data-piece]'); if (pc) { S.pieces[pc.dataset.piece] = Number(b.dataset.v); saveState(); renderPractical(); renderToday(); return; }
   const sc = b.closest('[data-scale]'); if (sc) { S.scales[sc.dataset.scale] = Number(b.dataset.v); saveState(); renderPractical(); renderToday(); return; }
-  if (b.dataset.level) { e.preventDefault(); S.settings.level = b.dataset.level; _avail=null; saveState(); renderLevel(); renderTheory(); renderToday(); if (typeof renderTestsHome==='function') renderTestsHome(); toast(b.dataset.level==='exam'?'Switched to Exam · Grade 5 questions':'Foundation-level questions'); return; }
+  if (b.dataset.level) { e.preventDefault(); S.settings.level = b.dataset.level; S.settings.levelTs = Date.now(); _avail=null; saveState(); renderLevel(); renderTheory(); renderToday(); if (typeof renderTestsHome==='function') renderTestsHome(); toast(b.dataset.level==='exam'?'Switched to Exam · Grade 5 questions':'Foundation-level questions'); return; }
   if (b.dataset.drill) { showTab('tests'); startTest('topic', b.dataset.drill); window.scrollTo({top:0}); return; }
   if (b.dataset.subdrill) { showTab('tests'); startTest('sub', b.dataset.subdrill, b.dataset.sub); window.scrollTo({top:0}); return; }
   if (b.dataset.start) { showTab('tests'); startTest(b.dataset.start, b.dataset.starttopic || $('#topicPick').value, b.dataset.startsub || null); window.scrollTo({top:0}); return; }
@@ -1502,7 +1505,13 @@ function applyDocs(docs){
   Object.entries(docs).forEach(([path, data]) => {
     if (!data || typeof data !== 'object') return;
     const [col, id] = path.split('/');
-    if (path === 'state/main') { S = migrate(merge(JSON.parse(JSON.stringify(DEFAULT)), data)); lsSet('g5:state/main', S); changed = true; }
+    if (path === 'state/main') {
+      // keep this device's question level if it was chosen more recently than the copy coming in (stops a stale device or the monitor reverting Exam -> Foundation)
+      const mine = S && S.settings ? { level: S.settings.level, levelTs: Number(S.settings.levelTs||0) } : null;
+      const theirsTs = Number((data.settings && data.settings.levelTs) || 0);
+      S = migrate(merge(JSON.parse(JSON.stringify(DEFAULT)), data));
+      if (mine && mine.levelTs > theirsTs && mine.level) { S.settings.level = mine.level; S.settings.levelTs = mine.levelTs; if (typeof remoteSet === 'function' && syncReady()) remoteSet('state/main', S); }
+      lsSet('g5:state/main', S); changed = true; }
     else if (col === 'tests') { const i = tests.findIndex(t=>t.id===id); const rec = {id, ...data}; if (i>=0) tests[i] = rec; else tests.push(rec); changed = true; }
     else if (col === 'log') { logs[id] = data; changed = true; }
     else if (col === 'practice') { practice[id] = data; changed = true; }
