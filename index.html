@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-29.2244';</script>
+<script>window.__G5_BUILD__='2026-10-29.2245';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1365,7 +1365,7 @@ function fixTargets(){ const M = examSubStats(); const c = Object.entries(M).fil
   if (c.length < 3) { try { weakBuckets().filter(b=>b.sub && b.seen && subTopic(b.sub) && !c.some(x=>x.sub===b.sub)).slice(0, 3-c.length).forEach(b=>c.push({sub:b.sub, topic:b.topic, acc:null, n:0, need:0})); } catch(e){} }
   return c.slice(0,3); }
 // Exam-level (Grade 5) accuracy per topic over the last 30 days — the number that actually predicts the exam.
-function examTopicStats(){ const M = {}; const cut = Date.now()-RECENT; tests.forEach(t=>{ if (t.level!=='exam' || t.ts<cut) return; Object.entries(t.byTopic||{}).forEach(([k,v])=>{ const e = M[k] = M[k] || {r:0,n:0}; e.r += v.r; e.n += v.n; }); }); return M; }
+function examTopicStats(){ const M = {}; recentTests().forEach(t=>{ if (t.level!=='exam') return; Object.entries(t.byTopic||{}).forEach(([k,v])=>{ const e = M[k] = M[k] || {r:0,n:0}; e.r += v.r; e.n += v.n; }); }); return M; }
 function mockTrend(){ const ex = tests.filter(t=>t.mode==='mock' && t.level==='exam' && !stoppedEarly(t)).sort((a,b)=>a.ts-b.ts); if (ex.length < 2) return null;
   const pts = ex.map(t=>({x: t.ts/86400000, y: 100*t.score/t.total})); const mx = avg(pts.map(p=>p.x)), my = avg(pts.map(p=>p.y));
   const sxx = pts.reduce((a,p)=>a+(p.x-mx)*(p.x-mx),0); const slope = sxx ? pts.reduce((a,p)=>a+(p.x-mx)*(p.y-my),0)/sxx : 0;
