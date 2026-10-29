@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-29.1325';</script>
+<script>window.__G5_BUILD__='2026-10-29.2243';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -211,10 +211,11 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <section class="view" id="view-theory">
   <div class="stack">
     <div class="row between">
-      <div><h2>Theory · 11 syllabus targets</h2><p class="muted small">Scores are Claude’s, from your drills and mocks (exam-level evidence counts fully, foundation-level up to 65%). Open a topic for its sub-areas, videos, key facts and drills.</p></div>
+      <div><h2>Theory · 11 syllabus targets</h2><p class="muted small">Scores are Claude’s, from your drills and mocks (exam-level evidence counts fully, foundation-level at 75%). G5 = your accuracy on Grade 5 questions. Open a topic for its sub-areas, lesson, key facts and drills.</p></div>
       <div class="row"><span class="pct" id="theoryAvg">0%</span><div class="bar" style="width:140px"><i id="theoryBar" style="width:0%"></i></div></div>
     </div>
     <div class="card flat small muted">Online exam: 2 hours, 75 marks. Pass 50 · Merit 60 · Distinction 65. Paper sections: rhythm · pitch · keys & scales · intervals · chords · terms, signs & instruments · music in context.</div>
+    <div id="theoryFocus" class="card stack" hidden></div>
     <div id="topics" class="stack"></div>
   </div>
 </section>
@@ -1360,6 +1361,8 @@ function fixTargets(){ const M = examSubStats(); const c = Object.entries(M).fil
   c.sort((a,b)=>b.need-a.need);
   if (c.length < 3) { try { weakBuckets().filter(b=>b.sub && b.seen && subTopic(b.sub) && !c.some(x=>x.sub===b.sub)).slice(0, 3-c.length).forEach(b=>c.push({sub:b.sub, topic:b.topic, acc:null, n:0, need:0})); } catch(e){} }
   return c.slice(0,3); }
+// Exam-level (Grade 5) accuracy per topic over the last 30 days — the number that actually predicts the exam.
+function examTopicStats(){ const M = {}; const cut = Date.now()-RECENT; tests.forEach(t=>{ if (t.level!=='exam' || t.ts<cut) return; Object.entries(t.byTopic||{}).forEach(([k,v])=>{ const e = M[k] = M[k] || {r:0,n:0}; e.r += v.r; e.n += v.n; }); }); return M; }
 function mockTrend(){ const ex = tests.filter(t=>t.mode==='mock' && t.level==='exam' && !stoppedEarly(t)).sort((a,b)=>a.ts-b.ts); if (ex.length < 2) return null;
   const pts = ex.map(t=>({x: t.ts/86400000, y: 100*t.score/t.total})); const mx = avg(pts.map(p=>p.x)), my = avg(pts.map(p=>p.y));
   const sxx = pts.reduce((a,p)=>a+(p.x-mx)*(p.x-mx),0); const slope = sxx ? pts.reduce((a,p)=>a+(p.x-mx)*(p.y-my),0)/sxx : 0;
@@ -1472,6 +1475,10 @@ function renderTheory(){
     el.querySelector(`[data-acc="${t.id}"]`).textContent = sc.n ? `Accuracy ${Math.round(100*sc.acc)}% over ${sc.n} questions (30 days). Readiness ${Math.round(sc.score)}% is the Grade-5 weighted score — questions done at Foundation level count at 75%${sc.nx<6?', so do some at Exam level to lift it':''}.${sc.basis==='mixed'?' Self-assessment is still part of the score.':''}` : 'No drills yet — the score is 60% of your starting self-assessment.';
     el.querySelector(`[data-subs="${t.id}"]`).innerHTML = t.subs.map(s => { const book = /\(book\)|\(practice papers\)/.test(s); const name = s.replace(/ \((book|practice papers)\)/,''); if (book) { const cov = !!(S.covered[t.id+'|'+name]); return `<div class="score"><span>${esc(name)} <span class="small muted">— written work in your book / with teacher</span></span><span class="n"></span><label class="row small" style="gap:6px"><input type="checkbox" data-covered="${esc(t.id+'|'+name)}" ${cov?'checked':''}> covered</label></div>`; }
       const sc2 = subScore(s); return scoreRow(esc(s), sc2, `<button type="button" class="linkbtn small" data-subdrill="${t.id}" data-sub="${esc(s)}">drill 10</button>`); }).join(''); });
+  const fx = fixTargets(); const fxSubs = new Set(fx.map(x=>x.sub)); const ESx = examSubStats(); const ETx = examTopicStats();
+  const foc = $('#theoryFocus'); if (foc) { foc.hidden = !fx.length; foc.innerHTML = fx.length ? `<div class="eyebrow">🎯 Fix-it focus right now · your stuck Grade 5 areas</div>` + fx.map(x=>`<div class="row between" style="flex-wrap:nowrap;gap:10px"><span style="flex:1"><b>${esc(x.sub)}</b> <span class="small muted">· ${esc((TOPICS.find(t=>t.id===x.topic)||{}).name||'')}</span></span><span class="pct">${x.acc!=null?Math.round(100*x.acc)+'%':'–'}</span><button type="button" class="btn sm primary" data-start="fix" data-starttopic="${x.topic}" data-startsub="${esc(x.sub)}">Fix-it</button></div>`).join('') + `<p class="small muted">Exam-level score on your last 20 answers in each. An area leaves this list once it is above 70%; the goal is 85%.</p>` : ''; }
+  TOPICS.forEach(t => { const st = el.querySelector(`[data-status="${t.id}"]`); const e = ETx[t.id]; const hasFix = t.subs.some(s=>fxSubs.has(s)); st.innerHTML = (hasFix?'<span class="tag bad">🎯 Fix-it</span> ':'') + (e && e.n ? `<span class="small muted" title="Grade 5 (exam-level) accuracy, last 30 days">G5 ${Math.round(100*e.r/e.n)}%</span> ` : '') + st.innerHTML;
+    el.querySelectorAll(`[data-subs="${t.id}"] .score`).forEach(row=>{ const name = row.querySelector('span') && row.querySelector('span').childNodes[0] ? row.querySelector('span').childNodes[0].textContent.trim() : ''; if (fxSubs.has(name)) { row.style.background = 'color-mix(in srgb, var(--bad) 10%, transparent)'; row.style.borderRadius = '6px'; const es = ESx[name]; const tag = document.createElement('span'); tag.className = 'tag bad'; tag.style.marginLeft = '6px'; tag.textContent = '🎯 Fix-it' + (es && es.n ? ` · G5 ${Math.round(100*es.r/es.n)}%` : ''); row.querySelector('span').appendChild(tag); } }); });
   $('#theoryAvg').textContent = Math.round(theoryPct())+'%'; $('#theoryBar').style.width = Math.round(theoryPct())+'%';
   renderLessons();
 }
