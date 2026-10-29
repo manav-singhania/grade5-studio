@@ -94,6 +94,10 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 .today-item:first-of-type{border-top:0}
 .today-item .mins{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1;padding-top:2px;color:var(--accent)}
 .today-item input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);margin-top:2px}
+.autotick{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:inline-grid;place-items:center;font-size:13px;font-weight:700;margin-top:2px}
+.autotick.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink,#fff)}
+#quitTest.armed{background:var(--bad,#b3261e);color:#fff;border-color:transparent}
+#runTip{border-left:3px solid var(--accent)}
 .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .acts a,.acts button{appearance:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:6px 11px;font:inherit;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}
 .acts a.sec,.acts button.sec{background:var(--surface);color:var(--fg);border-color:var(--line)}
@@ -260,7 +264,7 @@ const AURAL = [
 ];
 const TOPIC_WEIGHT = {t1:1,t2:1.2,t3:1.2,t4:.6,t5:1.3,t6:.8,t7:1.3,t8:1,t9:.8,t10:1,t11:1.2};
 const FOUND_CAP = 0.75;
-const PLAN_VERSION = 2; // bump when the daily-plan logic changes, so a frozen plan from an older build auto-refreshes
+const PLAN_VERSION = 3; // bump when the daily-plan logic changes, so a frozen plan from an older build auto-refreshes
 
 /* ---------- State ---------- */
 const DEFAULT = {
@@ -360,7 +364,7 @@ function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; const acc
 function statusTag(st){ if (!st || !st[0]) return ''; if (/Exam level/i.test(st[0])) return `<button type="button" class="tag ${st[1]}" data-level="exam" style="cursor:pointer;border:0;font:inherit" title="Tap to switch to Exam · Grade 5 questions">${st[0]} ↗</button>`; return `<span class="tag ${st[1]}">${st[0]}</span>`; }
 function foundationReady(){ if ((S.settings.level||'foundation')!=='foundation') return false; let strong=0, enough=0; TOPICS.forEach(t=>{ const sc=topicScore(t.id); if (sc.n>=8){ enough++; if ((sc.acc!=null?sc.acc:0)>=0.85) strong++; } }); return enough>=4 && strong>=Math.max(4, Math.ceil(enough*0.6)); }
 function theoryPct(){ let w=0,s=0; TOPICS.forEach(t=>{ w+=TOPIC_WEIGHT[t.id]; s+=TOPIC_WEIGHT[t.id]*topicScore(t.id).score; }); return w?s/w:0; }
-function mockStats(){ const ex = tests.filter(t=>t.mode==='mock'&&t.level==='exam').slice(0,3), fo = tests.filter(t=>t.mode==='mock'&&t.level!=='exam').slice(0,3); return { exam: ex.length?avg(ex.map(t=>100*t.score/t.total)):null, found: fo.length?avg(fo.map(t=>100*t.score/t.total)):null, nExam: ex.length }; }
+function mockStats(){ const full = tests.filter(t=>t.mode==='mock' && !stoppedEarly(t)); const ex = full.filter(t=>t.level==='exam').slice(0,3), fo = full.filter(t=>t.level!=='exam').slice(0,3); return { exam: ex.length?avg(ex.map(t=>100*t.score/t.total)):null, found: fo.length?avg(fo.map(t=>100*t.score/t.total)):null, nExam: ex.length }; }
 function theoryReadiness(){ const m = mockStats(); const tp = theoryPct(); return m.exam===null ? tp*0.9 : tp*0.5 + m.exam*0.5; }
 function piecesPct(){ return avg(PIECES.map(p=>100*(S.pieces[p.id]||0)/(PIECE_STAGES.length-1))); }
 function scalesPct(){ const all = SCALE_GROUPS.flatMap(g=>g.items.map(i=>i[0])); return avg(all.map(id=>100*(S.scales[id]||0)/3)); }
@@ -379,10 +383,53 @@ function weakWeights(){ const w = {}; TOPICS.forEach(t=>{ w[t.id] = topicScore(t
 let _avail = null, _availLevel = null;
 function avail(){ const lv = S.settings.level||'foundation'; if (_avail && _availLevel===lv) return _avail; T.setLevel(lv); _avail = T.availableSubs(); _availLevel = lv; return _avail; }
 const DIST_TARGET = 85;
-function weakBuckets(){ const out = []; const av = avail(); Object.entries(av).forEach(([t, subs])=>{ const tw = TOPIC_WEIGHT[t]||1; const list = subs.length?subs:['']; list.forEach(sub=>{ const sc = sub?subScore(sub):topicScore(t); let need; if (!sc || !sc.n) need = 55*tw; else need = Math.max(5, DIST_TARGET - sc.score)*tw; out.push({topic:t, sub:sub||null, need, label: sub || (TOPICS.find(x=>x.id===t)||{}).name}); }); }); out.sort((x,y)=>y.need-x.need); return out; }
-function topWeakAreas(k){ return weakBuckets().slice(0,k).map(b=>b.label); }
+function weakBuckets(){ const out = []; const av = avail(); Object.entries(av).forEach(([t, subs])=>{ const tw = TOPIC_WEIGHT[t]||1; const list = subs.length?subs:['']; list.forEach(sub=>{ const sc = sub?subScore(sub):topicScore(t); let need; if (!sc || !sc.n) need = 55*tw; else need = Math.max(5, DIST_TARGET - sc.score)*tw; out.push({topic:t, sub:sub||null, need, seen: !!(sc && sc.n), label: sub || (TOPICS.find(x=>x.id===t)||{}).name}); }); }); out.sort((x,y)=>y.need-x.need); return out; }
+function topWeakAreas(k){ const all = weakBuckets(); const seen = all.filter(b=>b.seen); return (seen.length>=k ? seen : all).slice(0,k).map(b=>b.label); }
 function seenTopics(){ const s = TOPICS.filter(t=>topicScore(t.id).n>0).map(t=>t.id); return s.length>=2 ? s : Object.keys(T.GEN); }
-function adaptiveAlloc(n){ n = n||16; const top = weakBuckets().slice(0,8); if (!top.length) return [{topic:'t5', sub:null, count:n}]; const tot = top.reduce((a,b)=>a+b.need,0)||1; let alloc = top.map(b=>({topic:b.topic, sub:b.sub, count: Math.max(1, Math.round(n*b.need/tot))})); const cap = Math.max(2, Math.round(n*0.25)); alloc.forEach(a=>{ if (a.count>cap) a.count=cap; }); let s = alloc.reduce((a,x)=>a+x.count,0); let guard=0; while (s>n && guard++<50){ const mx = alloc.reduce((p,c)=>c.count>p.count?c:p, alloc[0]); mx.count--; s--; } guard=0; while (s<n && guard++<50){ const mn = alloc.reduce((p,c)=>c.count<p.count?c:p, alloc[0]); mn.count++; s++; } return alloc.filter(a=>a.count>0); }
+// Concentrated: the 3 weakest areas he has already met get 4+4+3 questions (enough to fix a misconception), brand-new areas get at most 2 slots, the rest 1 each.
+function adaptiveAlloc(n){ n = n||16; const all = weakBuckets(); if (!all.length) return [{topic:'t5', sub:null, count:n}];
+  const seen = all.filter(b=>b.seen), unseen = all.filter(b=>!b.seen); const alloc = []; let used = 0; const add = (b,c)=>{ c = Math.min(c, n-used); if (c>0) { alloc.push({topic:b.topic, sub:b.sub, count:c}); used += c; } };
+  [4,4,3].forEach((c,i)=>{ if (seen[i]) add(seen[i], c); });
+  unseen.slice(0,2).forEach(b=>add(b,1));
+  for (let i=3; i<seen.length && used<n; i++) add(seen[i],1);
+  let j=0; while (used<n && alloc.length && j<100) { alloc[j % Math.min(3, alloc.length)].count++; used++; j++; }
+  return alloc; }
+const PLANNED_Q = {topic:15, sub:10, review:10, weak:16, mock:30, fix:8, quick:3};
+function stoppedEarly(t){ const p = t.planned || PLANNED_Q[t.mode]; return !!p && t.mode!=='quick' && t.total < Math.ceil(0.8*p); }
+function subTopic(sub){ const t = TOPICS.find(x=>x.subs.includes(sub)); return t ? t.id : null; }
+// Exam-level accuracy per sub-area, using only the most recent 20 answers per sub so improvement shows quickly.
+function examSubStats(){ const M = {}; tests.slice().sort((a,b)=>b.ts-a.ts).forEach(t=>{ if (t.level!=='exam') return; Object.entries(t.bySub||{}).forEach(([k,v])=>{ const e = M[k] = M[k] || {r:0,n:0}; if (e.n >= 20) return; e.r += v.r; e.n += v.n; }); }); return M; }
+// Fix-it targets: sub-areas with real exam-level evidence (n>=4) still under 70%, weighted by exam marks.
+function fixTargets(){ const M = examSubStats(); const c = Object.entries(M).filter(([k,e])=>e.n>=4 && e.r/e.n<0.7 && subTopic(k)).map(([k,e])=>({sub:k, topic:subTopic(k), acc:e.r/e.n, n:e.n, need:(0.85-e.r/e.n)*(TOPIC_WEIGHT[subTopic(k)]||1)}));
+  c.sort((a,b)=>b.need-a.need);
+  if (c.length < 3) { try { weakBuckets().filter(b=>b.sub && b.seen && subTopic(b.sub) && !c.some(x=>x.sub===b.sub)).slice(0, 3-c.length).forEach(b=>c.push({sub:b.sub, topic:b.topic, acc:null, n:0, need:0})); } catch(e){} }
+  return c.slice(0,3); }
+function mockTrend(){ const ex = tests.filter(t=>t.mode==='mock' && t.level==='exam' && !stoppedEarly(t)).sort((a,b)=>a.ts-b.ts); if (ex.length < 2) return null;
+  const pts = ex.map(t=>({x: t.ts/86400000, y: 100*t.score/t.total})); const mx = avg(pts.map(p=>p.x)), my = avg(pts.map(p=>p.y));
+  const sxx = pts.reduce((a,p)=>a+(p.x-mx)*(p.x-mx),0); const slope = sxx ? pts.reduce((a,p)=>a+(p.x-mx)*(p.y-my),0)/sxx : 0;
+  const examX = new Date(S.settings.theoryDate+'T00:00:00').getTime()/86400000; const proj = Math.max(0, Math.min(100, my + slope*(examX - mx)));
+  return { first: Math.round(pts[0].y), last: Math.round(pts[pts.length-1].y), n: pts.length, perWeek: slope*7, proj }; }
+
+/* 1-minute tips shown at the top of a Fix-it run. Written for the sub-areas Aryav's exam-level data shows as stuck. Anything not listed falls back to the topic lesson bullets. */
+const SUB_TIPS = {
+  'Transposing instruments': {tip:['These instruments SOUND lower than they are written. Learn four facts: B♭ clarinet and B♭ trumpet sound a major 2nd lower; A clarinet sounds a minor 3rd lower; horn in F and cor anglais sound a perfect 5th lower.','Trick: the instrument’s name is the note you HEAR when it plays a written C. B♭ trumpet plays written C → you hear B♭.','Written part → concert pitch: go DOWN by that interval.','Concert pitch → written part: go UP by that interval.','Move the key signature the same way as the notes.'], eg:'Horn in F, part written in D major. It sounds a perfect 5th lower: D → G. Answer: G major. (To make a horn SOUND in G major you would write in D major — up a 5th.)'},
+  'Clefs & transposing instruments': {tip:['Alto clef = viola. Tenor clef = the high notes of the cello (also bassoon and trombone).','Octave transposers: piccolo sounds an octave HIGHER than written; double bass sounds an octave LOWER.','Interval transposers at Grade 5: clarinet in B♭ or A, trumpet in B♭, horn in F, cor anglais (in F).','NOT transposing: flute, oboe, bassoon, trombone, violin, viola, cello.'], eg:'“Which is NOT a transposing instrument: horn in F, trumpet in B♭, cor anglais, bassoon?” → bassoon (it sounds as written).'},
+  'Instrument families & sound': {tip:['Woodwind, no reed: flute, piccolo. Single reed: clarinet, saxophone. Double reed: oboe, cor anglais, bassoon, contrabassoon.','Brass: the player’s lips buzz in a cup mouthpiece — trumpet, horn, trombone, tuba.','Strings, highest → lowest: violin, viola, cello, double bass. The harp is a string instrument too.','Percussion with a definite pitch: timpani, xylophone, glockenspiel, tubular bells. Without: snare drum, triangle, tambourine, cymbals, tam-tam.'], eg:'Cor anglais sounds like it should be brass, but it is a double-reed WOODWIND (an alto oboe).'},
+  'Voices': {tip:['Female voices, high → low: soprano, mezzo-soprano, contralto (alto).','Male voices, high → low: tenor, baritone, bass.','Choir order SATB = soprano, alto, tenor, bass (highest to lowest).','“Middle” voices: mezzo-soprano sits between soprano and alto; baritone sits between tenor and bass.','A tenor part is written in treble clef (sounding an octave lower) or in bass clef.'], eg:'Lowest female voice → contralto (alto). Lowest male voice → bass.'},
+  'Inversions (b, c)': {tip:['Step 1 — find the ROOT: rearrange the notes so they stack in 3rds (all on lines or all in spaces). The bottom of that stack is the root.','Step 2 — the root’s scale degree gives the Roman numeral (I, II, IV, V).','Step 3 — now look ONLY at the lowest written note: root → a; 3rd → b; 5th → c.','In C major: C-E-G = Ia, E-G-C = Ib, G-C-E = Ic.'], eg:'G major, notes (lowest first) B–D–G. Stack in 3rds: G–B–D, so the root is G = chord I. The bass is B, the 3rd → Ib.'},
+  'Chords in root position': {tip:['Root position = the root is the lowest note, and the chord looks like a neat “snowman” (line-line-line or space-space-space).','The root’s degree in the key gives the Roman numeral: 1 → I, 2 → II, 4 → IV, 5 → V.','Check the key signature before naming the notes.'], eg:'D major, notes E–G–B: E is degree 2 → chord II (supertonic), root position = IIa.'},
+  'Cadences': {tip:['Look at the LAST chord first.','Ends on V → imperfect (I–V, II–V or IV–V). Sounds unfinished, like a comma.','Ends on I after V → perfect (V–I). Sounds finished, a full stop.','Ends on I after IV → plagal (IV–I). The “Amen” at the end of a hymn.','Ic–V–I is a common way to approach a perfect cadence.'], eg:'II – V ends on V → imperfect cadence.'},
+  'French & German terms': {tip:['French: vite = quick, lent = slow, modéré = moderate, cédez = yield (hold back the speed), en dehors = bring the melody out, douce = sweet.','German speed: schnell = fast, langsam = slow (think “long”), mäßig = moderate, lebhaft = lively (Leben = life), bewegt = with movement.','German mood: ruhig = calm, mit Ausdruck = with expression.','Small German words: ohne = without, wenig = a little, etwas = somewhat.'], eg:'“etwas langsam” = somewhat slow; “mit Ausdruck” = with expression.'},
+  'Italian terms': {tip:['Learn tempo words as a ladder, slow → fast: grave, largo, larghetto, lento, adagio, andante, moderato, allegretto, allegro, vivace, presto.','Speed changes: rallentando = gradually slower; ritenuto = held back at once; accelerando and stringendo = gradually faster; a tempo = back to speed.','Dying away (softer, often slower too): calando, morendo, perdendosi, smorzando.','Mood words: dolce = sweet, cantabile = singing, maestoso = majestic, leggiero = light, pesante = heavy, giocoso = playful, mesto = sad.'], eg:'“meno mosso” = less movement (slower); “più mosso” = more movement (faster).'},
+  'Harmonic & melodic minor': {tip:['Harmonic minor: raise the 7th note — going up AND coming down.','Melodic minor: raise the 6th AND the 7th going UP; coming DOWN it uses the key signature only (no changes).','“Raise” means up a semitone: a natural becomes a sharp, a flat becomes a natural.','Get the key signature from the relative major: the major key is a minor 3rd ABOVE the minor tonic.'], eg:'D minor (1 flat, B♭). Harmonic: C♯ up and down. Melodic going up: B♮ and C♯; coming down: C♮ and B♭.'},
+  'Simple intervals (major/minor/perfect)': {tip:['Number: count the letter names, including both ends (C up to G: C D E F G = 5th).','Quality: pretend the LOWER note is the start of a major scale. If the top note is in that scale → major (2nd, 3rd, 6th, 7th) or perfect (4th, 5th, 8ve).','One semitone smaller than major = minor.','Count upwards from the bottom note, even when the bottom note is the second one written.'], eg:'E up to C: E F G A B C = 6th. E major has C♯, so C♮ is one semitone smaller → minor 6th.'},
+  'Augmented & diminished': {tip:['A major or perfect interval made one semitone BIGGER → augmented.','A minor or perfect interval made one semitone SMALLER → diminished.','Always count the number from the letter names first, then fix the quality.'], eg:'F up to B: F G A B = 4th. F major has B♭, so B♮ is one bigger than perfect → augmented 4th.'},
+  'Compound intervals': {tip:['Bigger than an octave = compound.','Take away 7 to find the simple interval: 9th = compound 2nd, 10th = compound 3rd, 12th = compound 5th.','The quality (major, minor, perfect) stays the same.'], eg:'C up to E in the next octave = major 10th = compound major 3rd.'},
+  'Grace notes (acciaccatura/appoggiatura)': {tip:['Acciaccatura = a small note WITH a slash through its tail. Squeeze it in as quickly as possible.','Appoggiatura = a small note WITHOUT a slash. It leans on the beat and takes time from the main note — usually half of it (two-thirds if the main note is dotted).'], eg:'Appoggiatura D before a crotchet C → play a quaver D, then a quaver C.'},
+  'Transposing a melody': {tip:['Move the tonic by the interval first, to find the new key and its key signature.','Then move every note by the same number of letter names.','Accidentals: work out what each one does in the old key (raises or lowers a note), then do the same in the new key.'], eg:'A melody in F major moved up a major 2nd → G major (1 sharp).'}
+};
+function tipHTML(sub, topic){ const t = SUB_TIPS[sub]; if (t) return `<div class="eyebrow">1-minute tip · ${esc(sub)}</div><ul class="facts lessonbullets">${t.tip.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><div class="egbox"><b>Example.</b> ${esc(t.eg)}</div>`;
+  const L = (typeof LESSONS!=='undefined' && LESSONS[topic]) || null; if (!L) return ''; return `<div class="eyebrow">1-minute tip · ${esc(sub||'')}</div><ul class="facts lessonbullets">${(L.body||[]).slice(0,5).map(x=>`<li>${esc(x)}</li>`).join('')}</ul>${L.example?`<div class="egbox"><b>Example.</b> ${esc(L.example)}</div>`:''}`; }
 
 
 </script>
@@ -412,21 +459,33 @@ function streak(){ let n=0; const days = lastDays(60).reverse(); for (const d of
 function weeklyTrend(){ // theory score per ISO week from tests
   const weeks = {}; tests.forEach(t=>{ const d = new Date(t.ts); const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay()+6)%7)); const w = iso(monday); const e = weeks[w] = weeks[w] || {r:0,n:0,wr:0, mocks:[]}; const wt = t.level==='exam'?1:FOUND_CAP; e.r += t.score; e.n += t.total; e.wr += t.score*wt; if (t.mode==='mock') e.mocks.push(Math.round(100*t.score/t.total) + (t.level==='exam'?'':'ᶠ')); });
   return Object.entries(weeks).sort((a,b)=>a[0].localeCompare(b[0])).slice(-8).map(([w,e])=>({week:w, score:e.n?Math.round(100*e.wr/e.n):null, n:e.n, mocks:e.mocks})); }
+function activeMin(d){ return Object.values((practice[d]||{}).time||{}).reduce((a,b)=>a+(Number(b)||0),0)/60; }
 function alerts(){
   const A = []; const today = iso(new Date()); const d14 = lastDays(14).filter(d=>!onTravel(d)); const stats = d14.map(d=>dayStat(d)).filter(Boolean);
+  const dT = daysTo(S.settings.theoryDate); const theoryPhase = dT > 0; const mins = Number(S.settings.mins)||50;
   const idle = activityOn(today) ? 0 : (()=>{ let n=0; for (const d of lastDays(14).reverse()) { if (d===today || onTravel(d)) continue; if (activityOn(d)) break; n++; } return n; })();
   if (idle >= 2) A.push(['bad', `No practice logged for ${idle} days.`]);
+  // Real time, measured in the app — ticks overstate it.
+  const d7 = lastDays(8).filter(d=>d!==today && !onTravel(d)).slice(-7); const real7 = d7.reduce((a,d)=>a+activeMin(d),0); const avg7 = d7.length ? real7/d7.length : 0; const zero7 = d7.filter(d=>activeMin(d)<5).length;
+  if (d7.length && avg7 < 0.6*mins) A.push([avg7 < 0.35*mins ? 'bad' : 'warn', `Real working time: ${Math.round(avg7)} min/day over the last 7 days (plan ${mins}). ${zero7} of those days had under 5 minutes.`]);
   const missedMin = stats.reduce((a,s)=>a+(s.pm-s.dm),0), plannedMin = stats.reduce((a,s)=>a+s.pm,0);
-  if (plannedMin && missedMin/plannedMin > 0.4) A.push(['warn', `Only ${Math.round(100*(plannedMin-missedMin)/plannedMin)}% of planned minutes done in the last 14 days.`]);
+  if (plannedMin && missedMin/plannedMin > 0.4) A.push(['warn', `Only ${Math.round(100*(plannedMin-missedMin)/plannedMin)}% of planned items completed in the last 14 days.`]);
+  const cut14 = Date.now()-14*86400000; const quits = tests.filter(t=>t.ts>=cut14 && stoppedEarly(t));
+  if (quits.length >= 2) { const nm = t => t.mode==='mock' ? 'mock' : t.mode==='weak' ? 'weak-spot drill' : t.mode==='review' ? 'mixed recall' : (t.sub || (TOPICS.find(x=>x.id===t.topic)||{}).name || t.mode); const names = [...new Set(quits.map(nm))].slice(0,5);
+    A.push(['warn', `Stopped early ${quits.length} times in 14 days (${names.join(', ')}). He tends to quit on the hard topics — those are the ones that need finishing.`]); }
   const m = mockStats(); if (m.exam!==null && m.exam < 87) A.push([m.exam<67?'bad':'warn', `Exam-level mocks averaging ${Math.round(m.exam)}% — distinction needs 87%${m.exam<67?' (pass line 67%)':''}.`]);
-  const dT = daysTo(S.settings.theoryDate); if (dT <= 30 && dT > 0 && !(S.settings.theoryBooked)) A.push(['bad', `Theory exam not marked as booked with ${dT} days to go — book on abrsm.org (28-day window) so it is sat before the 2 Dec trip.`]);
-  if (dT <= 21 && (m.exam===null || m.exam < 75)) A.push(['warn', `${dT} days to the theory date with ${m.exam===null?'no exam-level mock yet':'mocks under 75%'} — a pass is likely but distinction is not; the next window after the trip is late January.`]);
+  const tr = mockTrend(); if (tr && theoryPhase) A.push([tr.proj<67?'bad':tr.proj<87?'warn':'good', `Mock trend: ${tr.first}% → ${tr.last}% over ${tr.n} full exam-level mocks (${tr.perWeek>=0?'+':''}${tr.perWeek.toFixed(1)} pts/week). At this pace ≈ ${Math.round(tr.proj)}% by ${S.settings.theoryDate.slice(5)} — a straight-line guess, not a forecast.`]);
+  if (dT <= 35 && dT > 0 && !(S.settings.theoryBooked)) A.push(['bad', `Theory exam not marked as booked with ${dT} days to go — the checkpoint is 1 Nov. Decide whether to sit on ${S.settings.theoryDate.slice(5)} or after the trip.`]);
+  if (dT <= 21 && dT > 0 && (m.exam===null || m.exam < 75)) A.push(['warn', `${dT} days to the theory date with ${m.exam===null?'no exam-level mock yet':'mocks under 75%'} — a pass is likely but distinction is not.`]);
+  const fx = fixTargets().filter(x=>x.acc!=null); if (fx.length) A.push(['', 'Fix-it focus (stuck at exam level): ' + fx.map(x=>`${x.sub} ${Math.round(100*x.acc)}% (${x.n})`).join('; ')]);
   const weak = TOPICS.map(t=>({t, sc: topicScore(t.id)})).filter(x=>x.sc.n>=4 && x.sc.score<45); if (weak.length) A.push(['warn', 'Needs work: ' + weak.map(x=>x.t.name).join('; ')]);
   const notDrilled = TOPICS.filter(t=>!(EV.T[t.id]&&EV.T[t.id].n)); if (notDrilled.length>=4) A.push(['', `${notDrilled.length} theory targets have never been drilled: ${notDrilled.map(t=>t.name.split(' ')[0]+'…').join(', ')}`]);
-  const pcs = PIECES.filter(p=>(S.pieces[p.id]||0)<3); const dP = daysTo(S.settings.pracDate); if (dP < 120 && pcs.length) A.push(['warn', `${pcs.length} piece${pcs.length>1?'s':''} not yet up to tempo with ${dP} days to the practical.`]);
-  if (daysTo('2027-01-31') <= 0 && pcs.length) A.push(['bad', 'Checkpoint 31 Jan passed: pieces not all at stage 3 — the practical should move to the following session.']);
-  const srw = srEntries().filter(e=>Date.now()-e.ts < 7*86400000).length; if (srw===0) A.push(['', 'No sight-reading pieces this week.']);
-  const auw = Object.values(practice).filter(p=>Date.now()-new Date(p.date+'T00:00:00') < 7*86400000).some(p=>Object.keys(p.aural||{}).length); if (!auw) A.push(['', 'No aural trainer rounds this week.']);
+  if (!theoryPhase) {
+    const pcs = PIECES.filter(p=>(S.pieces[p.id]||0)<3); const dP = daysTo(S.settings.pracDate); if (dP < 120 && pcs.length) A.push(['warn', `${pcs.length} piece${pcs.length>1?'s':''} not yet up to tempo with ${dP} days to the practical.`]);
+    if (daysTo('2027-01-31') <= 0 && pcs.length) A.push(['bad', 'Checkpoint 31 Jan passed: pieces not all at stage 3 — the practical should move to the following session.']);
+    const srw = srEntries().filter(e=>Date.now()-e.ts < 7*86400000).length; if (srw===0) A.push(['', 'No sight-reading pieces this week.']);
+    const auw = Object.values(practice).filter(p=>Date.now()-new Date(p.date+'T00:00:00') < 7*86400000).some(p=>Object.keys(p.aural||{}).length); if (!auw) A.push(['', 'No aural trainer rounds this week.']);
+  }
   if (!A.length) A.push(['good', 'Nothing to flag — plan being followed and scores moving.']);
   return A;
 }
@@ -467,7 +526,7 @@ function render(){
   $('#theoryRows').innerHTML = TOPICS.map(t=>{ const sc = topicScore(t.id); const st = statusOf(sc); const subs = t.subs.filter(s=>!/\(book\)|\(practice papers\)/.test(s)).map(s=>{ const ss = subScore(s); return `<span class="chip ${ss?(ss.score<45?'bad':ss.score<75?'warn':'good'):''}" title="${esc(s)}">${esc(s.split(' (')[0].slice(0,22))}${ss?' '+Math.round(ss.score)+'%':''}</span>`; }).join(' ');
     return `<tr><td>${esc(t.name)}${t.isNew?' <span class="tag new">G5</span>':''}</td><td><span class="pct">${sc.n?Math.round(sc.score)+'%':'–'}</span><span class="small muted"> n=${sc.n}</span>${bar(sc.score)}</td><td><span class="tag ${st[1]}">${st[0]}</span></td><td class="small">${subs}</td></tr>`; }).join('');
   // mocks list
-  $('#mockRows').innerHTML = tests.filter(t=>t.mode==='mock').slice(0,8).map(t=>`<tr><td>${new Date(t.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</td><td>${t.level==='exam'?'Exam':'Foundation'}</td><td><b>${t.score}/${t.total}</b> (${Math.round(100*t.score/t.total)}%)</td></tr>`).join('') || '<tr><td colspan="3" class="small muted">No full mocks yet.</td></tr>';
+  $('#mockRows').innerHTML = tests.filter(t=>t.mode==='mock').slice(0,8).map(t=>`<tr><td>${new Date(t.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</td><td>${t.level==='exam'?'Exam':'Foundation'}</td><td><b>${t.score}/${t.total}</b> (${Math.round(100*t.score/t.total)}%)${stoppedEarly(t)?' · stopped early, not counted':''}</td></tr>`).join('') || '<tr><td colspan="3" class="small muted">No full mocks yet.</td></tr>';
   // practical
   $('#pracRows').innerHTML = PIECES.map(p=>`<div class="score"><span>${p.list} ${esc(p.composer)}</span><span class="n">${esc(PIECE_STAGES[S.pieces[p.id]||0])}</span><span class="pct">${Math.round(100*(S.pieces[p.id]||0)/5)}%</span>${bar(100*(S.pieces[p.id]||0)/5)}</div>`).join('') + `<div class="score"><span>Scales & arpeggios</span><span class="n">${SCALE_GROUPS.flatMap(g=>g.items).filter(i=>(S.scales[i[0]]||0)>=2).length}/28 from memory</span><span class="pct">${Math.round(scalesPct())}%</span>${bar(scalesPct())}</div>` + SR_AREAS.slice(0,2).map(([n,f])=>{ const sc = srAreaScore(f); return `<div class="score"><span>Sight-reading · ${n}</span><span class="n">${sc?sc.n+' pieces':'none'}</span><span class="pct">${sc?Math.round(sc.score)+'%':'–'}</span>${bar(sc?sc.score:0)}</div>`; }).join('') + AURAL.map(a=>{ const sc = auralScore(a.id); return `<div class="score"><span>Aural ${a.id}</span><span class="n">${sc?sc.n+' rounds':'none'}</span><span class="pct">${sc?Math.round(sc.score)+'%':'–'}</span>${bar(sc?sc.score:0)}</div>`; }).join('');
   $('#brief').innerHTML = teacherBrief().map(l=>`<li>${esc(l)}</li>`).join('');
@@ -484,14 +543,14 @@ function render(){
   ];
   $('#checkpoints').innerHTML = cps.map(([d,t,ok])=>{ const due = daysTo(d); return `<div class="logrow ${ok?'ok':due<0?'miss':''}"><span>${ok?'✓':due<0?'✗':'·'}</span><span>${esc(t)}</span><span class="small muted">${d.slice(5)}${due>=0?` (${due} d)`:''}</span></div>`; }).join('');
   // daily activity (last 14 days)
-  const label = {learn:'Learn',drill:'Drill/mock',prac:'Practical',prac2:'Pieces',prac3:'SR/aural'};
+  const label = {fix:'Fix-it',review:'Recall',learn:'Learn',drill:'Drill/mock',prac:'Practical',prac2:'Pieces',prac3:'SR/aural'};
   $('#dailyRows').innerHTML = lastDays(14).reverse().map(d=>{ const v = logs[d]; const pz = practice[d] || {}; const tm = pz.time || {}; const total = Object.values(tm).reduce((a,b)=>a+b,0);
     const dayTests = tests.filter(t=>iso(new Date(t.ts))===d).sort((a,b)=>a.ts-b.ts);
     const sr = (pz.sr||[]).filter(x=>x&&typeof x==='object'); const au = Object.entries(pz.aural||{}).filter(([k,x])=>x&&typeof x==='object');
     const ticks = v && Array.isArray(v.plan) ? v.plan.map(it=>`<span class="chip ${(v.done||[]).includes(it.k)?'good':(d===today?'':'bad')}">${(v.done||[]).includes(it.k)?'✓':'✗'} ${esc(it.t.split(':')[0])} ${it.m}′</span>`).join(' ') : '<span class="small muted">plan not opened</span>';
     const timeTxt = total ? `<b>${Math.round(total/60)} min</b> <span class="small muted">(${['theory','tests','sr','practical','today'].filter(k=>tm[k]).map(k=>({theory:'theory',tests:'tests',sr:'sight-reading',practical:'practical',today:'today page'})[k]+' '+Math.round(tm[k]/60)).join(', ')})</span>` : '<span class="small muted">no active time recorded</span>';
     const acts = [];
-    dayTests.forEach(t=>acts.push(`${new Date(t.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})} ${t.mode==='mock'?'Full mock':t.mode==='weak'?'Weak spots':t.mode==='quick'?'Sync check':t.mode==='sub'?esc(t.sub||'sub-area'):'Topic '+esc((TOPICS.find(x=>x.id===t.topic)||{}).name||'')} (${t.level==='exam'?'G5':'G3–4'}) <b>${t.score}/${t.total}</b>`));
+    dayTests.forEach(t=>acts.push(`${new Date(t.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})} ${t.mode==='mock'?'Full mock':t.mode==='fix'?'Fix-it: '+esc(t.sub||''):t.mode==='review'?'Mixed recall':t.mode==='weak'?'Weak spots':t.mode==='quick'?'Sync check':t.mode==='sub'?esc(t.sub||'sub-area'):'Topic '+esc((TOPICS.find(x=>x.id===t.topic)||{}).name||'')} (${t.level==='exam'?'G5':'G3–4'}) <b>${t.score}/${t.total}</b>${stoppedEarly(t)?' <span class="chip bad">stopped early</span>':''}`));
     if (sr.length) acts.push(`Sight-reading: ${sr.length} piece${sr.length>1?'s':''}, results ${sr.map(x=>x.r).join(', ')} / 4${sr.some(x=>x.level==='exam')?' (incl. Grade 5 level)':''}`);
     if (au.length) acts.push('Aural: ' + au.map(([k,x])=>`${k} ×${x.n} (${x.ok} ok)`).join(', '));
     if (!acts.length && !total && !v) return '';

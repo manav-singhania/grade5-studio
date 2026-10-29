@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-29.1312';</script>
+<script>window.__G5_BUILD__='2026-10-29.1325';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -105,6 +105,10 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 .today-item:first-of-type{border-top:0}
 .today-item .mins{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1;padding-top:2px;color:var(--accent)}
 .today-item input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);margin-top:2px}
+.autotick{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:inline-grid;place-items:center;font-size:13px;font-weight:700;margin-top:2px}
+.autotick.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink,#fff)}
+#quitTest.armed{background:var(--bad,#b3261e);color:#fff;border-color:transparent}
+#runTip{border-left:3px solid var(--accent)}
 .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .acts a,.acts button{appearance:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:6px 11px;font:inherit;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}
 .acts a.sec,.acts button.sec{background:var(--surface);color:var(--fg);border-color:var(--line)}
@@ -292,6 +296,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
     <div id="testRun" class="stack" hidden>
       <div class="row between"><div><span class="eyebrow" id="runLabel">Question</span><h3 id="runCount">1 / 30</h3></div><div class="row"><span class="tag" id="runClock" hidden title="Time on this mock — the real paper is 2 hours">0:00</span><span class="pct" id="runScore">0 correct</span><button class="btn sm" id="quitTest">End test</button></div></div>
       <div class="bar thin"><i id="runBar" style="width:0%"></i></div>
+      <div class="card stack" id="runTip" hidden></div>
       <div class="card stack">
         <div class="row between"><span class="tag" id="qTopic"></span><span class="small muted" id="qSub"></span></div>
         <p id="qPrompt" style="font-size:17px;max-width:70ch"></p>
@@ -1215,7 +1220,7 @@ const AURAL = [
 ];
 const TOPIC_WEIGHT = {t1:1,t2:1.2,t3:1.2,t4:.6,t5:1.3,t6:.8,t7:1.3,t8:1,t9:.8,t10:1,t11:1.2};
 const FOUND_CAP = 0.75;
-const PLAN_VERSION = 2; // bump when the daily-plan logic changes, so a frozen plan from an older build auto-refreshes
+const PLAN_VERSION = 3; // bump when the daily-plan logic changes, so a frozen plan from an older build auto-refreshes
 
 /* ---------- State ---------- */
 const DEFAULT = {
@@ -1315,7 +1320,7 @@ function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; const acc
 function statusTag(st){ if (!st || !st[0]) return ''; if (/Exam level/i.test(st[0])) return `<button type="button" class="tag ${st[1]}" data-level="exam" style="cursor:pointer;border:0;font:inherit" title="Tap to switch to Exam · Grade 5 questions">${st[0]} ↗</button>`; return `<span class="tag ${st[1]}">${st[0]}</span>`; }
 function foundationReady(){ if ((S.settings.level||'foundation')!=='foundation') return false; let strong=0, enough=0; TOPICS.forEach(t=>{ const sc=topicScore(t.id); if (sc.n>=8){ enough++; if ((sc.acc!=null?sc.acc:0)>=0.85) strong++; } }); return enough>=4 && strong>=Math.max(4, Math.ceil(enough*0.6)); }
 function theoryPct(){ let w=0,s=0; TOPICS.forEach(t=>{ w+=TOPIC_WEIGHT[t.id]; s+=TOPIC_WEIGHT[t.id]*topicScore(t.id).score; }); return w?s/w:0; }
-function mockStats(){ const ex = tests.filter(t=>t.mode==='mock'&&t.level==='exam').slice(0,3), fo = tests.filter(t=>t.mode==='mock'&&t.level!=='exam').slice(0,3); return { exam: ex.length?avg(ex.map(t=>100*t.score/t.total)):null, found: fo.length?avg(fo.map(t=>100*t.score/t.total)):null, nExam: ex.length }; }
+function mockStats(){ const full = tests.filter(t=>t.mode==='mock' && !stoppedEarly(t)); const ex = full.filter(t=>t.level==='exam').slice(0,3), fo = full.filter(t=>t.level!=='exam').slice(0,3); return { exam: ex.length?avg(ex.map(t=>100*t.score/t.total)):null, found: fo.length?avg(fo.map(t=>100*t.score/t.total)):null, nExam: ex.length }; }
 function theoryReadiness(){ const m = mockStats(); const tp = theoryPct(); return m.exam===null ? tp*0.9 : tp*0.5 + m.exam*0.5; }
 function piecesPct(){ return avg(PIECES.map(p=>100*(S.pieces[p.id]||0)/(PIECE_STAGES.length-1))); }
 function scalesPct(){ const all = SCALE_GROUPS.flatMap(g=>g.items.map(i=>i[0])); return avg(all.map(id=>100*(S.scales[id]||0)/3)); }
@@ -1334,10 +1339,53 @@ function weakWeights(){ const w = {}; TOPICS.forEach(t=>{ w[t.id] = topicScore(t
 let _avail = null, _availLevel = null;
 function avail(){ const lv = S.settings.level||'foundation'; if (_avail && _availLevel===lv) return _avail; T.setLevel(lv); _avail = T.availableSubs(); _availLevel = lv; return _avail; }
 const DIST_TARGET = 85;
-function weakBuckets(){ const out = []; const av = avail(); Object.entries(av).forEach(([t, subs])=>{ const tw = TOPIC_WEIGHT[t]||1; const list = subs.length?subs:['']; list.forEach(sub=>{ const sc = sub?subScore(sub):topicScore(t); let need; if (!sc || !sc.n) need = 55*tw; else need = Math.max(5, DIST_TARGET - sc.score)*tw; out.push({topic:t, sub:sub||null, need, label: sub || (TOPICS.find(x=>x.id===t)||{}).name}); }); }); out.sort((x,y)=>y.need-x.need); return out; }
-function topWeakAreas(k){ return weakBuckets().slice(0,k).map(b=>b.label); }
+function weakBuckets(){ const out = []; const av = avail(); Object.entries(av).forEach(([t, subs])=>{ const tw = TOPIC_WEIGHT[t]||1; const list = subs.length?subs:['']; list.forEach(sub=>{ const sc = sub?subScore(sub):topicScore(t); let need; if (!sc || !sc.n) need = 55*tw; else need = Math.max(5, DIST_TARGET - sc.score)*tw; out.push({topic:t, sub:sub||null, need, seen: !!(sc && sc.n), label: sub || (TOPICS.find(x=>x.id===t)||{}).name}); }); }); out.sort((x,y)=>y.need-x.need); return out; }
+function topWeakAreas(k){ const all = weakBuckets(); const seen = all.filter(b=>b.seen); return (seen.length>=k ? seen : all).slice(0,k).map(b=>b.label); }
 function seenTopics(){ const s = TOPICS.filter(t=>topicScore(t.id).n>0).map(t=>t.id); return s.length>=2 ? s : Object.keys(T.GEN); }
-function adaptiveAlloc(n){ n = n||16; const top = weakBuckets().slice(0,8); if (!top.length) return [{topic:'t5', sub:null, count:n}]; const tot = top.reduce((a,b)=>a+b.need,0)||1; let alloc = top.map(b=>({topic:b.topic, sub:b.sub, count: Math.max(1, Math.round(n*b.need/tot))})); const cap = Math.max(2, Math.round(n*0.25)); alloc.forEach(a=>{ if (a.count>cap) a.count=cap; }); let s = alloc.reduce((a,x)=>a+x.count,0); let guard=0; while (s>n && guard++<50){ const mx = alloc.reduce((p,c)=>c.count>p.count?c:p, alloc[0]); mx.count--; s--; } guard=0; while (s<n && guard++<50){ const mn = alloc.reduce((p,c)=>c.count<p.count?c:p, alloc[0]); mn.count++; s++; } return alloc.filter(a=>a.count>0); }
+// Concentrated: the 3 weakest areas he has already met get 4+4+3 questions (enough to fix a misconception), brand-new areas get at most 2 slots, the rest 1 each.
+function adaptiveAlloc(n){ n = n||16; const all = weakBuckets(); if (!all.length) return [{topic:'t5', sub:null, count:n}];
+  const seen = all.filter(b=>b.seen), unseen = all.filter(b=>!b.seen); const alloc = []; let used = 0; const add = (b,c)=>{ c = Math.min(c, n-used); if (c>0) { alloc.push({topic:b.topic, sub:b.sub, count:c}); used += c; } };
+  [4,4,3].forEach((c,i)=>{ if (seen[i]) add(seen[i], c); });
+  unseen.slice(0,2).forEach(b=>add(b,1));
+  for (let i=3; i<seen.length && used<n; i++) add(seen[i],1);
+  let j=0; while (used<n && alloc.length && j<100) { alloc[j % Math.min(3, alloc.length)].count++; used++; j++; }
+  return alloc; }
+const PLANNED_Q = {topic:15, sub:10, review:10, weak:16, mock:30, fix:8, quick:3};
+function stoppedEarly(t){ const p = t.planned || PLANNED_Q[t.mode]; return !!p && t.mode!=='quick' && t.total < Math.ceil(0.8*p); }
+function subTopic(sub){ const t = TOPICS.find(x=>x.subs.includes(sub)); return t ? t.id : null; }
+// Exam-level accuracy per sub-area, using only the most recent 20 answers per sub so improvement shows quickly.
+function examSubStats(){ const M = {}; tests.slice().sort((a,b)=>b.ts-a.ts).forEach(t=>{ if (t.level!=='exam') return; Object.entries(t.bySub||{}).forEach(([k,v])=>{ const e = M[k] = M[k] || {r:0,n:0}; if (e.n >= 20) return; e.r += v.r; e.n += v.n; }); }); return M; }
+// Fix-it targets: sub-areas with real exam-level evidence (n>=4) still under 70%, weighted by exam marks.
+function fixTargets(){ const M = examSubStats(); const c = Object.entries(M).filter(([k,e])=>e.n>=4 && e.r/e.n<0.7 && subTopic(k)).map(([k,e])=>({sub:k, topic:subTopic(k), acc:e.r/e.n, n:e.n, need:(0.85-e.r/e.n)*(TOPIC_WEIGHT[subTopic(k)]||1)}));
+  c.sort((a,b)=>b.need-a.need);
+  if (c.length < 3) { try { weakBuckets().filter(b=>b.sub && b.seen && subTopic(b.sub) && !c.some(x=>x.sub===b.sub)).slice(0, 3-c.length).forEach(b=>c.push({sub:b.sub, topic:b.topic, acc:null, n:0, need:0})); } catch(e){} }
+  return c.slice(0,3); }
+function mockTrend(){ const ex = tests.filter(t=>t.mode==='mock' && t.level==='exam' && !stoppedEarly(t)).sort((a,b)=>a.ts-b.ts); if (ex.length < 2) return null;
+  const pts = ex.map(t=>({x: t.ts/86400000, y: 100*t.score/t.total})); const mx = avg(pts.map(p=>p.x)), my = avg(pts.map(p=>p.y));
+  const sxx = pts.reduce((a,p)=>a+(p.x-mx)*(p.x-mx),0); const slope = sxx ? pts.reduce((a,p)=>a+(p.x-mx)*(p.y-my),0)/sxx : 0;
+  const examX = new Date(S.settings.theoryDate+'T00:00:00').getTime()/86400000; const proj = Math.max(0, Math.min(100, my + slope*(examX - mx)));
+  return { first: Math.round(pts[0].y), last: Math.round(pts[pts.length-1].y), n: pts.length, perWeek: slope*7, proj }; }
+
+/* 1-minute tips shown at the top of a Fix-it run. Written for the sub-areas Aryav's exam-level data shows as stuck. Anything not listed falls back to the topic lesson bullets. */
+const SUB_TIPS = {
+  'Transposing instruments': {tip:['These instruments SOUND lower than they are written. Learn four facts: B♭ clarinet and B♭ trumpet sound a major 2nd lower; A clarinet sounds a minor 3rd lower; horn in F and cor anglais sound a perfect 5th lower.','Trick: the instrument’s name is the note you HEAR when it plays a written C. B♭ trumpet plays written C → you hear B♭.','Written part → concert pitch: go DOWN by that interval.','Concert pitch → written part: go UP by that interval.','Move the key signature the same way as the notes.'], eg:'Horn in F, part written in D major. It sounds a perfect 5th lower: D → G. Answer: G major. (To make a horn SOUND in G major you would write in D major — up a 5th.)'},
+  'Clefs & transposing instruments': {tip:['Alto clef = viola. Tenor clef = the high notes of the cello (also bassoon and trombone).','Octave transposers: piccolo sounds an octave HIGHER than written; double bass sounds an octave LOWER.','Interval transposers at Grade 5: clarinet in B♭ or A, trumpet in B♭, horn in F, cor anglais (in F).','NOT transposing: flute, oboe, bassoon, trombone, violin, viola, cello.'], eg:'“Which is NOT a transposing instrument: horn in F, trumpet in B♭, cor anglais, bassoon?” → bassoon (it sounds as written).'},
+  'Instrument families & sound': {tip:['Woodwind, no reed: flute, piccolo. Single reed: clarinet, saxophone. Double reed: oboe, cor anglais, bassoon, contrabassoon.','Brass: the player’s lips buzz in a cup mouthpiece — trumpet, horn, trombone, tuba.','Strings, highest → lowest: violin, viola, cello, double bass. The harp is a string instrument too.','Percussion with a definite pitch: timpani, xylophone, glockenspiel, tubular bells. Without: snare drum, triangle, tambourine, cymbals, tam-tam.'], eg:'Cor anglais sounds like it should be brass, but it is a double-reed WOODWIND (an alto oboe).'},
+  'Voices': {tip:['Female voices, high → low: soprano, mezzo-soprano, contralto (alto).','Male voices, high → low: tenor, baritone, bass.','Choir order SATB = soprano, alto, tenor, bass (highest to lowest).','“Middle” voices: mezzo-soprano sits between soprano and alto; baritone sits between tenor and bass.','A tenor part is written in treble clef (sounding an octave lower) or in bass clef.'], eg:'Lowest female voice → contralto (alto). Lowest male voice → bass.'},
+  'Inversions (b, c)': {tip:['Step 1 — find the ROOT: rearrange the notes so they stack in 3rds (all on lines or all in spaces). The bottom of that stack is the root.','Step 2 — the root’s scale degree gives the Roman numeral (I, II, IV, V).','Step 3 — now look ONLY at the lowest written note: root → a; 3rd → b; 5th → c.','In C major: C-E-G = Ia, E-G-C = Ib, G-C-E = Ic.'], eg:'G major, notes (lowest first) B–D–G. Stack in 3rds: G–B–D, so the root is G = chord I. The bass is B, the 3rd → Ib.'},
+  'Chords in root position': {tip:['Root position = the root is the lowest note, and the chord looks like a neat “snowman” (line-line-line or space-space-space).','The root’s degree in the key gives the Roman numeral: 1 → I, 2 → II, 4 → IV, 5 → V.','Check the key signature before naming the notes.'], eg:'D major, notes E–G–B: E is degree 2 → chord II (supertonic), root position = IIa.'},
+  'Cadences': {tip:['Look at the LAST chord first.','Ends on V → imperfect (I–V, II–V or IV–V). Sounds unfinished, like a comma.','Ends on I after V → perfect (V–I). Sounds finished, a full stop.','Ends on I after IV → plagal (IV–I). The “Amen” at the end of a hymn.','Ic–V–I is a common way to approach a perfect cadence.'], eg:'II – V ends on V → imperfect cadence.'},
+  'French & German terms': {tip:['French: vite = quick, lent = slow, modéré = moderate, cédez = yield (hold back the speed), en dehors = bring the melody out, douce = sweet.','German speed: schnell = fast, langsam = slow (think “long”), mäßig = moderate, lebhaft = lively (Leben = life), bewegt = with movement.','German mood: ruhig = calm, mit Ausdruck = with expression.','Small German words: ohne = without, wenig = a little, etwas = somewhat.'], eg:'“etwas langsam” = somewhat slow; “mit Ausdruck” = with expression.'},
+  'Italian terms': {tip:['Learn tempo words as a ladder, slow → fast: grave, largo, larghetto, lento, adagio, andante, moderato, allegretto, allegro, vivace, presto.','Speed changes: rallentando = gradually slower; ritenuto = held back at once; accelerando and stringendo = gradually faster; a tempo = back to speed.','Dying away (softer, often slower too): calando, morendo, perdendosi, smorzando.','Mood words: dolce = sweet, cantabile = singing, maestoso = majestic, leggiero = light, pesante = heavy, giocoso = playful, mesto = sad.'], eg:'“meno mosso” = less movement (slower); “più mosso” = more movement (faster).'},
+  'Harmonic & melodic minor': {tip:['Harmonic minor: raise the 7th note — going up AND coming down.','Melodic minor: raise the 6th AND the 7th going UP; coming DOWN it uses the key signature only (no changes).','“Raise” means up a semitone: a natural becomes a sharp, a flat becomes a natural.','Get the key signature from the relative major: the major key is a minor 3rd ABOVE the minor tonic.'], eg:'D minor (1 flat, B♭). Harmonic: C♯ up and down. Melodic going up: B♮ and C♯; coming down: C♮ and B♭.'},
+  'Simple intervals (major/minor/perfect)': {tip:['Number: count the letter names, including both ends (C up to G: C D E F G = 5th).','Quality: pretend the LOWER note is the start of a major scale. If the top note is in that scale → major (2nd, 3rd, 6th, 7th) or perfect (4th, 5th, 8ve).','One semitone smaller than major = minor.','Count upwards from the bottom note, even when the bottom note is the second one written.'], eg:'E up to C: E F G A B C = 6th. E major has C♯, so C♮ is one semitone smaller → minor 6th.'},
+  'Augmented & diminished': {tip:['A major or perfect interval made one semitone BIGGER → augmented.','A minor or perfect interval made one semitone SMALLER → diminished.','Always count the number from the letter names first, then fix the quality.'], eg:'F up to B: F G A B = 4th. F major has B♭, so B♮ is one bigger than perfect → augmented 4th.'},
+  'Compound intervals': {tip:['Bigger than an octave = compound.','Take away 7 to find the simple interval: 9th = compound 2nd, 10th = compound 3rd, 12th = compound 5th.','The quality (major, minor, perfect) stays the same.'], eg:'C up to E in the next octave = major 10th = compound major 3rd.'},
+  'Grace notes (acciaccatura/appoggiatura)': {tip:['Acciaccatura = a small note WITH a slash through its tail. Squeeze it in as quickly as possible.','Appoggiatura = a small note WITHOUT a slash. It leans on the beat and takes time from the main note — usually half of it (two-thirds if the main note is dotted).'], eg:'Appoggiatura D before a crotchet C → play a quaver D, then a quaver C.'},
+  'Transposing a melody': {tip:['Move the tonic by the interval first, to find the new key and its key signature.','Then move every note by the same number of letter names.','Accidentals: work out what each one does in the old key (raises or lowers a note), then do the same in the new key.'], eg:'A melody in F major moved up a major 2nd → G major (1 sharp).'}
+};
+function tipHTML(sub, topic){ const t = SUB_TIPS[sub]; if (t) return `<div class="eyebrow">1-minute tip · ${esc(sub)}</div><ul class="facts lessonbullets">${t.tip.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><div class="egbox"><b>Example.</b> ${esc(t.eg)}</div>`;
+  const L = (typeof LESSONS!=='undefined' && LESSONS[topic]) || null; if (!L) return ''; return `<div class="eyebrow">1-minute tip · ${esc(sub||'')}</div><ul class="facts lessonbullets">${(L.body||[]).slice(0,5).map(x=>`<li>${esc(x)}</li>`).join('')}</ul>${L.example?`<div class="egbox"><b>Example.</b> ${esc(L.example)}</div>`:''}`; }
 
 /* ---------- Rendering ---------- */
 function renderAll(){ EV = evidence(); renderHeader(); renderToday(); renderTheory(); renderTestsHome(); renderPractical(); renderLog(); renderSettings(); renderPracticeStats(); }
@@ -1356,7 +1404,7 @@ function renderToday(){
   const learn = learnPool[dayNum % learnPool.length] || order[0];
   const scalesTodo = SCALE_GROUPS.flatMap(g=>g.items).filter(i=>(S.scales[i[0]]||0)<3); const scaleNames = scalesTodo.slice(0,3).map(i=>i[1]).join(', ') || 'maintenance: run all 28 items';
   const weakestPiece = PIECES.slice().sort((a,b)=>(S.pieces[a.id]||0)-(S.pieces[b.id]||0))[0];
-  const items = [];
+  const items = []; let planFallback = false;
   if (onTravel(date)) {
     $('#todayPhase').textContent = 'Travelling · light plan'; $('#todayPhase').className='tag';
     items.push({k:'drill', m:10, t:'Keep the terms and instruments warm', d:'10 questions a day on the two memorisation topics so nothing fades on the trip.', acts:[{label:'▶ Terms drill', start:'sub', topic:'t11', sub:'Italian terms'},{label:'Instruments drill', sec:true, start:'topic', topic:'t10'}]});
@@ -1364,10 +1412,14 @@ function renderToday(){
     $('#lessonNote').innerHTML = '<b>On the road:</b> no piano, so theory and aural vocabulary only. Days away are not counted as missed.';
   } else if (phase1) {
     $('#todayPhase').textContent = 'Phase 1 · Theory push'; $('#todayPhase').className='tag new';
-    const learnActs = [{label:'📖 Read the lesson', topic:learn.id}, {label:'Then drill it', sec:true, start:'topic', topic:learn.id}];
-    items.push({k:'learn', m:Math.round(mins*0.4), t:`Learn: ${learn.name}`, d:`Read the short lesson and key facts on the topic card, then work the matching pages in your book.`, acts: learnActs});
-    items.push({k:'drill', m:Math.round(mins*0.3), t: dow===6 ? 'Full mock test (timed)' : 'Weak-spot drill (adaptive)', d: dow===6 ? 'Saturday is mock day: do the 30-question mock in one sitting.' : `About 16 questions, concentrated where you're weakest right now: ${topWeakAreas(3).join(', ')||'all areas'}. Read every explanation.`, acts: dow===6 ? [{label:'▶ Start full mock', start:'mock'}] : [{label:'▶ Start weak-spot drill', start:'weak'},{label:`Just ${learn.name}`, sec:true, start:'topic', topic:learn.id}]});
-    items.push({k:'review', m:mins - Math.round(mins*0.4) - Math.round(mins*0.3), t:'Mixed recall: 10 questions on topics you’ve already done', d:'Extra practice — 10 random questions drawn from the topics you’ve worked before, so older material stays fresh. Read every explanation.', acts:[{label:'▶ Start mixed recall', start:'review'}]});
+    // Audit 29 Oct: lessons were ticked but barely read, and the same sub-areas stayed stuck for weeks. So the first block is now
+    // a targeted Fix-it (1-minute tip + 8 exam-level questions on ONE stuck sub-area), rotating among the 3 most stuck.
+    const fx = fixTargets(); const fix = fx.length ? fx[dayNum % fx.length] : null;
+    const mockDay = dow===3 || dow===6;
+    if (fix) items.push({k:'fix', m:Math.round(mins*0.3), t:`Fix-it: ${fix.sub}`, d:`Read the 1-minute tip at the top, then 8 Grade-5 questions on just this.${fix.acc!=null?` Your recent exam-level score here: ${Math.round(fix.acc*100)}% — target 85%.`:''} Read every explanation, especially the ones you get right by luck.`, acts:[{label:'▶ Start Fix-it', start:'fix', topic:fix.topic, sub:fix.sub},{label:'📖 Full lesson', sec:true, topic:fix.topic}]});
+    else { planFallback = true; } if (!fix) items.push({k:'fix', m:Math.round(mins*0.3), t:`Learn: ${learn.name}`, d:'Read the short lesson on the topic card, then drill it.', acts:[{label:'📖 Read the lesson', topic:learn.id},{label:'Then drill it', sec:true, start:'topic', topic:learn.id}]});
+    items.push({k:'drill', m:Math.round(mins*0.45), t: mockDay ? 'Full mock test (timed, all 30 questions)' : 'Weak-spot drill (adaptive, 16 questions)', d: mockDay ? 'Mock day (Wednesday and Saturday): all 30 questions in one sitting. Stopping early does not count.' : `Concentrated on your 3 weakest areas right now: ${topWeakAreas(3).join(', ')||'all areas'}. Finish all 16 — it only ticks when you do.`, acts: mockDay ? [{label:'▶ Start full mock', start:'mock'}] : [{label:'▶ Start weak-spot drill', start:'weak'}]});
+    items.push({k:'review', m:mins - Math.round(mins*0.3) - Math.round(mins*0.45), t:'Mixed recall: 10 questions on topics you’ve already done', d:'10 random questions from topics you’ve worked before, so older material stays fresh.', acts:[{label:'▶ Start mixed recall', start:'review'}]});
     $('#lessonNote').innerHTML = `<b>Theory only until the exam.</b> Pieces, scales, sight-reading and aural are still in their tabs for lesson time, but the daily plan stays on theory. <br><b>Lessons:</b> ${esc(S.settings.lesson1)}.`;
   } else {
     $('#todayPhase').textContent = 'Phase 2 · Practical'; $('#todayPhase').className='tag';
@@ -1378,13 +1430,14 @@ function renderToday(){
   }
   let plan = items;
   const stored = logs[date];
-  const fresh = stored && Array.isArray(stored.plan) && stored.plan.length && stored.pv === PLAN_VERSION;
+  const fresh = stored && Array.isArray(stored.plan) && stored.plan.length && stored.pv === PLAN_VERSION && !(stored.fb && !planFallback); // a fallback plan made before data synced is upgraded once Fix-it targets exist
   if (fresh) plan = stored.plan;
-  else if (!todayFrozen || !fresh) { todayFrozen = true; const rec = { date, done: (stored&&stored.done)||[], plan: items.map(it=>({k:it.k, t:it.t, m:it.m, d:it.d, acts:it.acts||[]})), phase: phase1?1:2, pv: PLAN_VERSION }; logs[date] = rec; if (db) db.collection('log').doc(date).set(rec).catch(()=>{}); else lsSet('g5:logs', logs); }
+  else if (!todayFrozen || !fresh) { todayFrozen = true; const rec = { date, done: (stored&&stored.done)||[], plan: items.map(it=>({k:it.k, t:it.t, m:it.m, d:it.d, acts:it.acts||[]})), phase: phase1?1:2, pv: PLAN_VERSION, fb: planFallback }; logs[date] = rec; if (db) db.collection('log').doc(date).set(rec).catch(()=>{}); else lsSet('g5:logs', logs); }
   const done = (logs[date] && logs[date].done) || [];
-  $('#todayList').innerHTML = plan.map(it => `<div class="today-item"><span class="mins">${it.m}′</span><span><b>${esc(it.t)}</b><br><span class="small muted">${esc(it.d)}</span>${it.acts?`<span class="acts">${it.acts.map(a=> a.href ? `<a href="${esc(a.href)}" target="_blank" rel="noopener" class="${a.sec?'sec':''}">${esc(a.label)}</a>` : `<button type="button" class="${a.sec?'sec':''}" ${a.start?`data-start="${a.start}" data-starttopic="${a.topic||''}" data-startsub="${esc(a.sub||'')}"`:''} ${a.topic&&!a.start?`data-opentopic="${a.topic}"`:''} ${a.section?`data-section="${a.section}"`:''} ${a.tool?`data-tool="${a.tool}"`:''}>${esc(a.label)}</button>`).join('')}</span>`:''}</span><input type="checkbox" data-done="${it.k}" ${done.includes(it.k)?'checked':''} aria-label="Done"></div>`).join('');
+  $('#todayList').innerHTML = plan.map(it => `<div class="today-item"><span class="mins">${it.m}′</span><span><b>${esc(it.t)}</b><br><span class="small muted">${esc(it.d)}</span>${it.acts?`<span class="acts">${it.acts.map(a=> a.href ? `<a href="${esc(a.href)}" target="_blank" rel="noopener" class="${a.sec?'sec':''}">${esc(a.label)}</a>` : `<button type="button" class="${a.sec?'sec':''}" ${a.start?`data-start="${a.start}" data-starttopic="${a.topic||''}" data-startsub="${esc(a.sub||'')}"`:''} ${a.topic&&!a.start?`data-opentopic="${a.topic}"`:''} ${a.section?`data-section="${a.section}"`:''} ${a.tool?`data-tool="${a.tool}"`:''}>${esc(a.label)}</button>`).join('')}</span>`:''}</span><span class="autotick ${done.includes(it.k)?'on':''}" title="${done.includes(it.k)?'Done':'Ticks itself when you finish this'}">${done.includes(it.k)?'✓':''}</span></div>`).join('');
   $('#todayTitle').textContent = `Today · ${mins} minutes`;
-  $('#todayNote').innerHTML = `Tick items as you finish them — they go into your practice log. <button type="button" class="btn sm" id="replan" style="margin-left:6px">Re-plan today</button>` + (foundationReady() ? ` <span class="tag good" style="margin-left:6px">🎯 Ready for Exam · Grade 5 — switch on the Mock Tests tab</span>` : '');
+  $('#todayNote').innerHTML = `<div id="todayMeter"></div>Each item ticks itself when you finish it. <button type="button" class="btn sm" id="replan" style="margin-left:6px">Re-plan today</button>` + (foundationReady() ? ` <span class="tag good" style="margin-left:6px">🎯 Ready for Exam · Grade 5 — switch on the Mock Tests tab</span>` : '');
+  renderMeter();
   const tr = theoryReadiness(), pr = practicalReadiness(); const m = mockStats();
   $('#readiness').innerHTML = [['Theory',tr,`${daysTo(S.settings.theoryDate)} days`],['Practical',pr,`${daysTo(S.settings.pracDate)} days`]].map(([n,v,d])=>`<div class="card"><div class="eyebrow">${n}</div><div class="kpi">${Math.round(v)}%</div><div class="small muted">${d}</div><div class="bar thin" style="margin-top:8px"><i style="width:${Math.round(v)}%"></i></div></div>`).join('');
   $('#readinessNote').textContent = `Goal: Distinction (theory 65/75 = 87%; practical 130/150). Theory = topic scores blended with your last exam-level mocks${m.exam!==null?` (avg ${Math.round(m.exam)}%)`:' (none yet)'}. Practical weights the four sections by their exam marks; pieces and scales come from the milestone stages you tick.`;
@@ -1395,6 +1448,10 @@ function renderToday(){
   renderComments();
 }
 
+function secsToday(){ const d = todayISO(); let s = 0; try { const p = practice && practice[d]; if (p && p.time) s += Object.values(p.time).reduce((a,b)=>a+(Number(b)||0),0); } catch(e){} try { if (typeof timeAcc !== 'undefined' && timeAcc) s += Object.values(timeAcc).reduce((a,b)=>a+(Number(b)||0),0); } catch(e){} return s; }
+function renderMeter(){ const el = $('#todayMeter'); if (!el) return; const mins = Number(S.settings.mins)||50; const m = Math.round(secsToday()/60); const pct = Math.min(100, Math.round(100*m/mins));
+  el.innerHTML = `<div style="margin-bottom:4px"><b>Today so far: ${m} of ${mins} min</b> <span class="small muted">· time actually spent working in the app</span></div><div class="bar thin" style="margin-bottom:10px"><i style="width:${pct}%"></i></div>`; }
+setInterval(()=>{ try { renderMeter(); } catch(e){} }, 60000);
 function renderTheory(){
   const el = $('#topics');
   if (!el.dataset.built) {
@@ -1452,7 +1509,7 @@ function renderAuralStats(){ const el = $('#auralAreas'); if (!el) return; el.in
 function renderSR(){ const el = $('#srAreas'); if (!el) return; el.innerHTML = SR_AREAS.map(([n,f])=>{ const sc = srAreaScore(f); const st = sc ? (sc.n<3?['No data yet','']:sc.score<45?['Needs work','bad']:sc.score<75?['Developing','warn']:sc.nx<3?['Secure at foundation','warn']:['Secure','good']) : ['No data yet','']; return `<div class="score"><span>${n}</span><span class="n">${sc?`${sc.n} piece${sc.n>1?'s':''}`:'none yet'}</span><span class="row" style="gap:6px"><span class="tag ${st[1]}">${st[0]}</span><span class="pct">${sc?Math.round(sc.score)+'%':'–'}</span></span><div class="bar thin"><i style="width:${sc?Math.round(sc.score):0}%"></i></div></div>`; }).join('');
   const all = srAreaScore(()=>true); $('#srOverall').textContent = all ? Math.round(all.score)+'%' : '–'; const wk = srEntries().filter(e=>Date.now()-e.ts < 7*86400000); $('#srStats').textContent = wk.length ? `This week: ${wk.length} piece${wk.length>1?'s':''}, average result ${(avg(wk.map(e=>e.r))).toFixed(1)} / 4. Results at foundation level count up to 65%.` : 'No pieces this week yet. Results at foundation level count up to 65%.'; }
 function renderLog(){
-  const label = {learn:'Theory learning',drill:'Drill / mock',prac:'Practical',prac2:'Pieces',prac3:'Sight-reading / aural'}; const today = todayISO();
+  const label = {fix:'Fix-it',review:'Mixed recall',learn:'Theory learning',drill:'Drill / mock',prac:'Practical',prac2:'Pieces',prac3:'Sight-reading / aural'}; const today = todayISO();
   const days = []; for (let i=27;i>=0;i--) { const dt = new Date(); dt.setDate(dt.getDate()-i); days.push(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')); }
   const stat = iso => { const v = logs[iso]; if (!v || !Array.isArray(v.plan) || !v.plan.length) return {state:'none', pm:0, dm:0, n:0, dn:0}; const done = new Set(v.done||[]); const pm = v.plan.reduce((s,it)=>s+(it.m||0),0); const dm = v.plan.filter(it=>done.has(it.k)).reduce((s,it)=>s+(it.m||0),0); const dn = v.plan.filter(it=>done.has(it.k)).length; return {state: dn===v.plan.length?'full': dn>0?'part': iso===today?'open': onTravel(iso)?'travel':'missed', pm, dm, n:v.plan.length, dn}; };
   $('#logStrip').innerHTML = days.map(iso=>{ const s = stat(iso); const dt = new Date(iso+'T00:00:00'); return `<i class="${s.state}" title="${iso}: ${s.state==='none'?'no plan':`${s.dn}/${s.n} items, ${s.dm}/${s.pm} min`}"><b>${dt.getDate()}</b></i>`; }).join('');
@@ -1469,12 +1526,16 @@ function renderSettings(){ $('#sName').value = S.settings.name||''; $('#sTheory'
 /* ---------- Tests ---------- */
 let run = null;
 function startTest(mode, topic, sub){
-  T.setLevel(S.settings.level||'foundation'); const w = weakWeights(); if (sub) w.__sub = sub; if (mode==='weak') w.__alloc = adaptiveAlloc(16); if (mode==='review') w.__topics = seenTopics(); const qs = T.buildTest(mode, topic, w);
-  run = { mode, topic, sub, qs, i:0, score:0, byTopic:{}, bySub:{}, answered:false, level: S.settings.level||'foundation', t0: Date.now() };
+  const lvl = mode==='fix' ? 'exam' : (S.settings.level||'foundation'); // Fix-it targets come from exam-level evidence, so they are always drilled at exam level
+  T.setLevel(S.settings.level||'foundation'); const w = weakWeights(); if (sub) w.__sub = sub; if (mode==='weak') w.__alloc = adaptiveAlloc(16); if (mode==='review') w.__topics = seenTopics();
+  T.setLevel(lvl); const qs = T.buildTest(mode==='fix' ? 'sub' : mode, topic, w); if (mode==='fix') qs.splice(PLANNED_Q.fix);
+  run = { mode, topic, sub, qs, i:0, score:0, byTopic:{}, bySub:{}, answered:false, level: lvl, t0: Date.now(), quitArmed:false };
+  const qb = $('#quitTest'); if (qb) { qb.textContent = 'End test'; qb.classList.remove('armed'); }
+  const tipEl = $('#runTip'); if (tipEl) { const h = mode==='fix' ? tipHTML(sub, topic) : ''; tipEl.hidden = !h; tipEl.innerHTML = h; }
   clearInterval(window.__mockClock); const clk = $('#runClock'); if (clk) { clk.hidden = mode!=='mock'; clk.textContent = '0:00'; }
   if (mode==='mock') window.__mockClock = setInterval(()=>{ if (!run) { clearInterval(window.__mockClock); return; } const s = Math.floor((Date.now()-run.t0)/1000); const c = $('#runClock'); if (c) c.textContent = `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }, 1000);
   $('#testHome').hidden = true; $('#testDone').hidden = true; $('#testRun').hidden = false;
-  $('#runLabel').textContent = ((S.settings.level||'foundation')==='exam' ? 'Exam level · ' : 'Foundation level · ') + (mode==='mock' ? 'Full mock' : mode==='weak' ? 'Weak-spot drill' : mode==='review' ? 'Mixed recall' : mode==='quick' ? 'Sync check' : mode==='sub' ? sub : 'Topic drill: ' + TOPICS.find(t=>t.id===topic).name);
+  $('#runLabel').textContent = (lvl==='exam' ? 'Exam level · ' : 'Foundation level · ') + (mode==='fix' ? 'Fix-it: ' + sub : mode==='mock' ? 'Full mock' : mode==='weak' ? 'Weak-spot drill' : mode==='review' ? 'Mixed recall' : mode==='quick' ? 'Sync check' : mode==='sub' ? sub : 'Topic drill: ' + TOPICS.find(t=>t.id===topic).name);
   showQ();
 }
 function showQ(){
@@ -1498,18 +1559,19 @@ function showWorking(q){ const w = $('#qWork'); w.hidden = false; $('#showWork')
   q.explainStaves.forEach((e,i)=> whenVF(()=>drawStave(w.querySelector(`[data-work="${i}"]`), e.spec))); }
 function finishTest(){
   const total = run.i + (run.answered?1:0); if (!total) { backToTests(); return; }
-  const rec = { ts: Date.now(), mode: run.mode, topic: run.topic||null, sub: run.sub||null, score: run.score, total, byTopic: run.byTopic, bySub: run.bySub, level: run.level || S.settings.level || 'foundation', secs: Math.round((Date.now()-(run.t0||Date.now()))/1000) };
+  const rec = { ts: Date.now(), mode: run.mode, topic: run.topic||null, sub: run.sub||null, score: run.score, total, planned: run.qs.length, byTopic: run.byTopic, bySub: run.bySub, level: run.level || S.settings.level || 'foundation', secs: Math.round((Date.now()-(run.t0||Date.now()))/1000) };
+  const finished = total >= Math.ceil(0.8*run.qs.length); const doneKey = {fix:'fix', review:'review', weak:'drill', mock:'drill'}[run.mode];
   clearInterval(window.__mockClock);
   const id = 't' + rec.ts;
   tests.unshift({id, ...rec}); lsSet('g5:tests', tests); if (db) db.collection('tests').doc(id).set(rec).catch(e=>toast('Could not save test: '+(e.code||'')));
   const pct = Math.round(100*rec.score/rec.total);
   const weak = Object.entries(rec.bySub).filter(([k,v])=>v.n && v.r<v.n).sort((a,b)=>(a[1].r/a[1].n)-(b[1].r/b[1].n)).slice(0,3);
   $('#doneHead').textContent = `${rec.score} / ${rec.total} — ${pct}%` + (run.mode==='mock' ? ` · ${Math.floor(rec.secs/60)} min ${rec.secs%60} s` : '');
-  $('#doneBody').innerHTML = `<p>${run.mode==='mock' ? (rec.level!=='exam' ? 'Foundation-level mock: a check that the Grade 3–4 base is there. It does not count towards the exam projection.' : pct>=87?'Distinction territory (65/75 = 87%).':pct>=80?'Merit territory (60/75 = 80%).':pct>=67?'Pass territory (50/75 = 67%) — keep pushing the weak targets.':'Below the pass line (67%). The sub-area scores tell you exactly where tomorrow’s 20 minutes go.') : 'Logged. Scores by sub-area update in Theory and Mock Tests.'}</p>${weak.length?`<div><div class="eyebrow">Revise first</div><ul class="facts">${weak.map(([k,v])=>`<li>${esc(k)} — ${v.r}/${v.n}</li>`).join('')}</ul></div>`:''}`;
-  $('#testRun').hidden = true; $('#testDone').hidden = false; run = null;
-  markDone('drill', true, true); if (!db) { EV = evidence(); renderTestsHome(); renderTheory(); renderToday(); }
+  $('#doneBody').innerHTML = `<p>${run.mode==='mock' ? (rec.level!=='exam' ? 'Foundation-level mock: a check that the Grade 3–4 base is there. It does not count towards the exam projection.' : pct>=87?'Distinction territory (65/75 = 87%).':pct>=80?'Merit territory (60/75 = 80%).':pct>=67?'Pass territory (50/75 = 67%) — keep pushing the weak targets.':'Below the pass line (67%). The sub-area scores tell you exactly where tomorrow’s 20 minutes go.') : 'Logged. Scores by sub-area update in Theory and Mock Tests.'}</p>${doneKey ? (finished ? '<p class="small">✓ Ticked off on today’s plan.</p>' : `<p class="small"><b>Stopped early (${total} of ${run.qs.length}).</b> Today’s item stays open — start it again and finish to tick it.</p>`) : ''}${weak.length?`<div><div class="eyebrow">Revise first</div><ul class="facts">${weak.map(([k,v])=>`<li>${esc(k)} — ${v.r}/${v.n}</li>`).join('')}</ul></div>`:''}`;
+  $('#testRun').hidden = true; $('#testDone').hidden = false; run = null; try { T.setLevel(S.settings.level||'foundation'); } catch(e){}
+  if (doneKey && finished) markDone(doneKey, true, true); try { EV = evidence(); renderTestsHome(); renderTheory(); renderToday(); if (!db) renderLog(); } catch(e){}
 }
-function backToTests(){ $('#testRun').hidden = true; $('#testDone').hidden = true; $('#testHome').hidden = false; run = null; }
+function backToTests(){ $('#testRun').hidden = true; $('#testDone').hidden = true; $('#testHome').hidden = false; run = null; try { T.setLevel(S.settings.level||'foundation'); } catch(e){} }
 
 /* ---------- Log ---------- */
 function markDone(key, on, quiet){
@@ -1549,7 +1611,10 @@ document.addEventListener('click', e => {
   if (b.dataset.play==='scale') { playScale(); return; }
   if (b.dataset.opt !== undefined && run) { answer(b.dataset.opt); return; }
   if (b.id==='nextQ' && run) { if (run.i === run.qs.length-1) finishTest(); else { run.i++; showQ(); } return; }
-  if (b.id==='quitTest' && run) { finishTest(); return; }
+  if (b.id==='quitTest' && run) { const did = run.i + (run.answered?1:0);
+    if (did < Math.ceil(0.6*run.qs.length) && !run.quitArmed) { run.quitArmed = true; b.textContent = 'Tap again to stop'; b.classList.add('armed'); toast(`${did} of ${run.qs.length} done — stopping now won’t tick today’s item`);
+      setTimeout(()=>{ if (run) run.quitArmed = false; const q = $('#quitTest'); if (q) { q.textContent = 'End test'; q.classList.remove('armed'); } }, 4000); return; }
+    finishTest(); return; }
   if (b.id==='showWork' && run) { showWorking(run.qs[run.i]); return; }
   if (b.id==='doneBack') { backToTests(); return; }
   if (b.id==='syncNow') {
@@ -1567,7 +1632,7 @@ document.addEventListener('click', e => {
   if (b.id==='replan') { const d = todayISO(); const cur = logs[d] || {date:d, done:[]}; const rec = { date:d, done: cur.done||[] }; logs[d] = rec; todayFrozen = false; if (db) db.collection('log').doc(d).set(rec).catch(()=>{}); else lsSet('g5:logs', logs); renderToday(); toast('Today re-planned'); return; }
   if (b.id==='saveSettings') { S.settings = { ...S.settings, name:$('#sName').value.trim(), theoryDate:$('#sTheory').value||S.settings.theoryDate, pracDate:$('#sPrac').value||S.settings.pracDate, mins:Number($('#sMins').value)||50, lesson1:$('#sLesson1').value.trim(), lesson2:$('#sLesson2').value.trim() }; saveState(); renderAll(); toast('Settings saved'); return; }
 });
-document.addEventListener('change', e => { const c = e.target.closest('[data-done]'); if (c) { markDone(c.dataset.done, c.checked); return; } const cv = e.target.closest('[data-covered]'); if (cv) { S.covered[cv.dataset.covered] = cv.checked; saveState(); } });
+document.addEventListener('change', e => { const cv = e.target.closest('[data-covered]'); if (cv) { S.covered[cv.dataset.covered] = cv.checked; saveState(); } });
 let toastT; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 /* ===================== Practice tools: audio, score rendering, sight-reading, aural, scales ===================== */
 let AC = null;
