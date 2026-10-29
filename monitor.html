@@ -346,15 +346,18 @@ function recentTests(){ const cut = Date.now()-RECENT; return tests.filter(t=>t.
 function evidence(){
   const T = {}, SUB = {};
   recentTests().forEach(t => { const w = t.level==='exam' ? 1 : FOUND_CAP;
-    Object.entries(t.byTopic||{}).forEach(([k,v])=>{ const e = T[k] = T[k] || {wr:0,n:0,nx:0,r:0}; e.wr += v.r*w; e.n += v.n; e.r += v.r; if (t.level==='exam') e.nx += v.n; });
-    Object.entries(t.bySub||{}).forEach(([k,v])=>{ const e = SUB[k] = SUB[k] || {wr:0,n:0,nx:0,r:0}; e.wr += v.r*w; e.n += v.n; e.r += v.r; if (t.level==='exam') e.nx += v.n; }); });
+    Object.entries(t.byTopic||{}).forEach(([k,v])=>{ const e = T[k] = T[k] || {wr:0,n:0,nx:0,r:0,rx:0}; e.wr += v.r*w; e.n += v.n; e.r += v.r; if (t.level==='exam') { e.nx += v.n; e.rx += v.r; } });
+    Object.entries(t.bySub||{}).forEach(([k,v])=>{ const e = SUB[k] = SUB[k] || {wr:0,n:0,nx:0,r:0,rx:0}; e.wr += v.r*w; e.n += v.n; e.r += v.r; if (t.level==='exam') { e.nx += v.n; e.rx += v.r; } }); });
   return {T, SUB};
 }
 let EV = {T:{}, SUB:{}};
 function topicScore(id){ const e = EV.T[id]; const seed = Number(S.seed[id]||0); if (!e || !e.n) return {score: seed*0.6, n:0, nx:0, basis:'seed'};
-  const ev = 100*e.wr/e.n; const k = Math.min(1, e.n/8); return {score: ev*k + seed*0.6*(1-k), n:e.n, nx:e.nx, acc: e.r/e.n, basis: k<1?'mixed':'evidence'}; }
-function subScore(name){ const e = EV.SUB[name]; if (!e || !e.n) return null; return {score:100*e.wr/e.n, n:e.n, nx:e.nx, acc:e.r/e.n}; }
-function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet','']; const acc = (sc.acc!=null ? sc.acc*100 : sc.score);
+  const ev = 100*e.wr/e.n; const k = Math.min(1, e.n/8); return {score: ev*k + seed*0.6*(1-k), n:e.n, nx:e.nx, acc: e.r/e.n, accx: e.nx ? e.rx/e.nx : null, basis: k<1?'mixed':'evidence'}; }
+function subScore(name){ const e = EV.SUB[name]; if (!e || !e.n) return null; return {score:100*e.wr/e.n, n:e.n, nx:e.nx, acc:e.r/e.n, accx: e.nx ? e.rx/e.nx : null}; }
+function statusOf(sc){ if (!sc || sc.n < 4) return ['No data yet',''];
+  // Once there is real Grade 5 evidence (6+ exam-level answers), the label follows exam-level accuracy — that is what the exam marks.
+  if (sc.nx >= 6 && sc.accx != null) { const ax = sc.accx*100; if (ax >= 88 && sc.nx >= 10) return ['Distinction level','good']; if (ax >= 80) return ['Secure','good']; if (ax >= 68) return ['Developing','warn']; if (ax < 50) return ['Needs work','bad']; return ['Developing','warn']; }
+  const acc = (sc.acc!=null ? sc.acc*100 : sc.score);
   if (sc.score >= 88 && sc.nx >= 10) return ['Distinction level','good'];
   if (sc.score >= 75 && sc.nx >= 6) return ['Secure','good'];
   if (acc >= 85) return sc.nx >= 6 ? ['Strong','good'] : ['Strong — try Exam level','good'];
