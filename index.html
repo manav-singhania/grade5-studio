@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-29.1310';</script>
+<script>window.__G5_BUILD__='2026-10-29.1312';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -867,7 +867,7 @@ const T = (() => {
       const opts = shuffle(uniq(pool)).filter(x => x !== noteName(correct)).slice(0, 3);
       if (opts.length < 3) continue;
       const vf = noteVf({ ...n, oct: 4 });
-      return { topic:'t2', sub:'Double sharps/flats & enharmonics', prompt:`Which note is enharmonically the same as ${noteName(n)} (same piano key)?`,
+      return { topic:'t2', sub:'Double sharps/flats & enharmonics', prompt:`Which note is enharmonically the same as ${noteName(n)}${Math.abs(acc) === 2 ? ` (${L} double-${acc > 0 ? 'sharp' : 'flat'})` : ''} — same piano key?`,
         stave:{ clef:'treble', notes:[{ keys:[vf], dur:'w', acc:[ACC_VF[String(acc)]] }], alt:`note ${noteName(n)}` },
         options: shuffle([noteName(correct), ...opts]), answer: noteName(correct),
         explain:`${noteName(n)} is ${L} ${acc > 0 ? 'raised' : 'lowered'} by ${Math.abs(acc)} semitone${Math.abs(acc) > 1 ? 's' : ''}, which lands on the same key as ${noteName(correct)}. (𝄪 = double sharp, +2; 𝄫 = double flat, −2.)` };
@@ -942,7 +942,7 @@ const T = (() => {
       if (opts.length < 3) continue;
       const startN = noteName(good[0]);
       let oct = up ? 4 : 5; let prev = null; const keys = good.map(x => { const idx = LETTERS.indexOf(x.letter); if (prev !== null) { if (up && idx < prev) oct++; if (!up && idx > prev) oct--; } prev = idx; return { keys:[noteVf({ ...x, oct })], dur:'8', acc:[x.acc ? ACC_VF[String(x.acc)] : null] }; });
-      return { topic:'t4', sub:'Spotting errors in a chromatic scale', prompt:`Which of these is a correctly written ${up ? 'ASCENDING' : 'DESCENDING'} chromatic scale from ${startN} (first ${len} notes)?`,
+      return { topic:'t4', sub:'Spotting errors in a chromatic scale', prompt:`Which of these is a correctly written ${up ? 'ASCENDING' : 'DESCENDING'} chromatic scale from ${startN} (first ${len} notes)?${[str(good), ...opts.slice(0,3)].some(x => /𝄪|𝄫/.test(x)) ? ' (𝄪 = double sharp, 𝄫 = double flat)' : ''}`,
         options: shuffle([str(good), ...opts.slice(0, 3)]), answer: str(good),
         explain:'Check three things: every step is exactly one semitone (no note left out), no pitch appears twice, and no letter name is used more than twice in a row. The wrong options each break one of these.',
         explainStaves:[{ caption:`The correct ${up ? 'ascending' : 'descending'} chromatic scale from ${startN}.`, spec:{ clef:'treble', notes: keys, width: 440, alt:'correct chromatic scale' } }] };
