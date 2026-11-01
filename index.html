@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-10-29.2245';</script>
+<script>window.__G5_BUILD__='2026-11-01.0246';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -993,7 +993,48 @@ const T = (() => {
                    : 'Articulation and signs: staccato dot = short; accent > = emphasis; tenuto line = full value; pause 𝄐 = hold longer; tie = same pitch held; slur = legato; 8va/8vb = octave up/down, loco = back to normal; Ped. … ✱ = sustaining pedal.' };
   }
   // ===================== end of added generators =====================
-  const GEN = { t1:[qKeySig,qKeySig,qKeySig,qMinorScale,qCircle,qMelodyKey,qEnharmKey], t2:[qClefNote,qClefNote,qClefNote,qClefRewrite,qEnharmNote], t3:[qTimeSig,qTimeSig,qDivision,qNoteValue,qNoteValue,qRewrite], t4:[qChromatic,qChromaticError], t5:[qInterval], t6:[qDegree], t7:[qChord,qChord,qCadence], t8:[qTransposition], t9:[qOrnament], t10:[qInstrument], t11:[qTerm,qTerm,qTerm,qSign,qSign] };
+  // ---------- Alto clef workout (parent-requested 1 Nov: careless slips in the Grade 4 book, p.10) ----------
+  const ALTO_CHECK = 'Alto clef check: middle C is the MIDDLE line. Lines bottom→top: F A C E G. Spaces: G B D F.';
+  function altoKeys(){ return F() ? MAJORS.filter(m=>Math.abs(m.sig)<=5) : MAJORS.filter(m=>Math.abs(m.sig)<=6); }
+  function altoTriad(maj, minor){ const sc = majorScale(maj); const tones = minor ? [sc[5], sc[0], sc[2]] : [sc[0], sc[2], sc[4]];
+    let oct = ['F','G','A','B'].includes(tones[0].letter) ? 3 : 4; const keys = []; let prev = -1;
+    tones.forEach((t,i)=>{ const idx = LETTERS.indexOf(t.letter); if (i>0 && idx <= prev) oct++; prev = idx; keys.push(noteVf({...t, oct})); }); return {tones, keys}; }
+  function qAltoNote(){ // wider range than the normal drill: includes leger lines above and below, as in the book
+    const n = pick(diatonicRange(['C',3],['D',5])); n.acc = pick([0,0,0,0,1,-1]); const correct = noteName(n);
+    const near = [LETTERS[(LETTERS.indexOf(n.letter)+1)%7], LETTERS[(LETTERS.indexOf(n.letter)+6)%7], LETTERS[(LETTERS.indexOf(n.letter)+2)%7], LETTERS[(LETTERS.indexOf(n.letter)+5)%7]].map(L=>L+ACC_TXT[String(n.acc)]);
+    const dist = midi({...n,acc:0})-60;
+    return { topic:'t2', sub:'Alto clef', prompt:'Name this note (alto clef).', stave:{clef:'alto', notes:[{keys:[noteVf(n)], dur:'w', acc:[n.acc?ACC_VF[String(n.acc)]:null]}], alt:`alto clef; note ${correct}${n.oct}`},
+      options: shuffle([correct, ...uniq(near).filter(x=>x!==correct).slice(0,3)]), answer: correct,
+      explain:`${ALTO_CHECK} ${dist===0?'It is middle C itself.':`Count ${dist>0?'up':'down'} from middle C by letter name: ${stepPath(n)}.`}${n.acc?` The ${n.acc>0?'sharp':'flat'} makes it ${correct}.`:''} Careless-slip check: the wrong answers here are the notes one or two steps away — always count from middle C, never guess from the treble-clef picture.`,
+      explainStaves:[{caption:'Middle C (middle line), then the note.', spec:{clef:'alto', notes:[{keys:['c/4'], dur:'h', label:'middle C'},{keys:[noteVf(n)], dur:'h', acc:[n.acc?ACC_VF[String(n.acc)]:null], label:correct, color:'hi'}], alt:'middle C and the note'}}] };
+  }
+  function qAltoKeyTriad(){ // key signature + tonic triad in alto clef → which key?
+    const maj = pick(altoKeys()); const minor = Math.random() < 0.5; const rel = REL_MINOR[maj.name];
+    const key = minor ? rel + ' minor' : maj.name + ' major'; const tr = altoTriad(maj, minor);
+    const relKey = minor ? maj.name + ' major' : rel + ' minor';
+    const parallel = minor ? rel + ' major' : maj.name + ' minor';
+    const others = uniq([relKey, parallel, ...shuffle(altoKeys().filter(m=>m!==maj)).slice(0,3).map(m=> minor ? REL_MINOR[m.name]+' minor' : m.name+' major')]).filter(x=>x!==key);
+    return { topic:'t1', sub:'Keys & tonic triads in alto clef', prompt:'Alto clef: this key signature is followed by a tonic triad. Which key is it?',
+      stave:{clef:'alto', key:vfKey(maj.name), notes:[{keys:tr.keys, dur:'w'}], alt:`alto clef, ${sigDesc(maj.sig)}, triad ${tr.tones.map(noteName).join('-')}`},
+      options: shuffle([key, ...others.slice(0,3)]), answer: key,
+      explain:`The key signature (${sigDesc(maj.sig)}) belongs to ${maj.name} major AND ${rel} minor. The triad decides: its lowest note (root) is ${noteName(tr.tones[0])}, notes ${tr.tones.map(noteName).join('–')}, so it is the tonic triad of ${key}. ${ALTO_CHECK}` };
+  }
+  function qAltoCheck(){ // spot the slip: is this key signature + tonic triad right for the named key?
+    const maj = pick(altoKeys()); const minor = Math.random() < 0.5; const rel = REL_MINOR[maj.name]; const key = minor ? rel + ' minor' : maj.name + ' major';
+    const kind = pick(['ok','ok','sig','triad','both']);
+    let sigKey = maj; if (kind==='sig' || kind==='both') { // the slip Aryav made: using the parallel key's signature (e.g. C minor written with C major's / a sharp signature)
+      const parTonic = minor ? rel : maj.name; const par = minor ? MAJORS.find(m=>m.name===parTonic) : MAJORS.find(m=>REL_MINOR[m.name]===parTonic);
+      sigKey = (par && par.sig !== maj.sig) ? par : MAJORS.find(m=>m.sig === -maj.sig && m.sig!==0) || MAJORS.find(m=>m.sig===maj.sig+1) || maj; }
+    const tr = (kind==='triad' || kind==='both') ? altoTriad(maj, !minor) : altoTriad(maj, minor); // wrong triad = the relative key's tonic triad
+    const answer = {ok:'Correct', sig:'Key signature is wrong', triad:'Tonic triad is wrong', both:'Both are wrong'}[kind];
+    const rightTr = altoTriad(maj, minor);
+    return { topic:'t1', sub:'Keys & tonic triads in alto clef', prompt:`A student wrote the key signature and tonic triad of ${key} in the alto clef. Check it like a teacher would:`,
+      stave:{clef:'alto', key:vfKey(sigKey.name), notes:[{keys:tr.keys, dur:'w'}], alt:`alto clef, ${sigDesc(sigKey.sig)}, triad ${tr.tones.map(noteName).join('-')}`},
+      options: ['Correct','Key signature is wrong','Tonic triad is wrong','Both are wrong'], answer,
+      explain:`${key}: key signature ${sigDesc(maj.sig)}${minor?` (find the relative major first: ${rel} minor → ${maj.name} major)`:''}; tonic triad ${rightTr.tones.map(noteName).join('–')}. The student wrote ${sigDesc(sigKey.sig)} and ${tr.tones.map(noteName).join('–')}. Two-step check every time: (1) count the sharps/flats for the key, (2) the triad's bottom note must be the key's tonic, with notes 1–3–5 all on lines or all in spaces.` };
+  }
+
+  const GEN = { t1:[qKeySig,qKeySig,qKeySig,qMinorScale,qCircle,qMelodyKey,qEnharmKey,qAltoKeyTriad,qAltoCheck], t2:[qClefNote,qClefNote,qClefNote,qClefRewrite,qEnharmNote], t3:[qTimeSig,qTimeSig,qDivision,qNoteValue,qNoteValue,qRewrite], t4:[qChromatic,qChromaticError], t5:[qInterval], t6:[qDegree], t7:[qChord,qChord,qCadence], t8:[qTransposition], t9:[qOrnament], t10:[qInstrument], t11:[qTerm,qTerm,qTerm,qSign,qSign] };
   const MOCK_MIX = { t1:3, t2:3, t3:3, t4:1, t5:4, t6:2, t7:3, t8:2, t9:2, t10:3, t11:4 }; // 30 questions
   function question(topic) { const q = pick(GEN[topic])(); q.id = topic + '-' + Math.random().toString(36).slice(2,8); return q; }
   function questionSub(topic, sub) { for (let i=0;i<40;i++) { const q = question(topic); if (!sub || q.sub === sub) return q; } return question(topic); }
@@ -1004,6 +1045,7 @@ const T = (() => {
     if (mode === 'topic') { for (let i=0;i<15;i++) slots.push({gen:()=>question(topic), fb:anyTopic}); }
     else if (mode === 'quick') { shuffle(Object.keys(GEN)).slice(0,3).forEach(t=>slots.push({gen:()=>question(t), fb:anyTopic})); }
     else if (mode === 'sub') { const sub = weights && weights.__sub; for (let i=0;i<10;i++) slots.push({gen:()=>questionSub(topic, sub), fb:()=>question(topic)}); }
+    else if (mode === 'alto') { [qAltoNote,qAltoNote,qAltoNote,qAltoNote,qAltoKeyTriad,qAltoKeyTriad,qAltoKeyTriad,qAltoCheck,qAltoCheck,qAltoCheck].forEach(g=>slots.push({gen:g, fb:g})); }
     else if (mode === 'review') { const ts = (weights && Array.isArray(weights.__topics) && weights.__topics.length) ? weights.__topics : Object.keys(GEN); for (let i=0;i<10;i++){ const tp = pick(ts); slots.push({gen:()=>question(tp), fb:anyTopic}); } }
     else if (mode === 'weak') {
       if (weights && Array.isArray(weights.__alloc) && weights.__alloc.length) { weights.__alloc.forEach(aa=>{ for (let i=0;i<aa.count;i++) slots.push({gen:()=> aa.sub ? questionSub(aa.topic, aa.sub) : question(aa.topic), fb:()=>question(aa.topic)}); }); }
@@ -1015,6 +1057,7 @@ const T = (() => {
       while (seen.has(sg) && tries++ < 30){ q = tries>18 ? anyTopic() : (tries>8 ? (s.fb||anyTopic)() : s.gen()); sg = qsig(q); }
       seen.add(sg); list.push(q); });
     if (mode === 'topic' || mode === 'sub') return list;
+    if (mode === 'alto') { const a = list.slice(0,4), b = shuffle(list.slice(4)); return a.concat(b); }
     return shuffle(list);
   }
   function availableSubs(){ const map = {}; Object.keys(GEN).forEach(t=>{ const s = new Set(); for (let i=0;i<250;i++){ const q = question(t); s.add(q.sub||''); } map[t] = [...s]; }); return map; }
@@ -1152,7 +1195,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 /* ---------- Syllabus content (fixed) ---------- */
 const TOPICS = [
   {id:'t1', name:'Keys & scales up to 6 sharps/flats', g3:'up to 4♯/♭ (G3 book p6, p17)', g4:'5♯/♭', g5:'6♯/♭: F♯, G♭ majors; D♯, E♭ minors',
-   subs:['Major key signatures','Minor key signatures','Harmonic & melodic minor','Circle of 5ths','Key of a melody','Enharmonic keys'],
+   subs:['Major key signatures','Minor key signatures','Harmonic & melodic minor','Circle of 5ths','Key of a melody','Enharmonic keys','Keys & tonic triads in alto clef'],
    facts:['Sharps go F C G D A E B; flats go B E A D G C F (the reverse).','Relative minor = a minor 3rd below the major tonic (shares the key signature).','Harmonic minor raises the 7th; melodic minor raises 6th and 7th going up, lowers them coming down.','Enharmonic pairs at Grade 5: F♯ = G♭ major, D♯ = E♭ minor.'],
    stave:{clef:'treble', key:'F#', alt:'F♯ major: six sharps'}, caption:'F♯ major (six sharps). Its relative minor is D♯ minor.'},
   {id:'t2', name:'All four clefs (tenor is new)', g3:'treble & bass only', g4:'alto clef', g5:'tenor clef', isNew:true,
@@ -1221,7 +1264,9 @@ const AURAL = [
 ];
 const TOPIC_WEIGHT = {t1:1,t2:1.2,t3:1.2,t4:.6,t5:1.3,t6:.8,t7:1.3,t8:1,t9:.8,t10:1,t11:1.2};
 const FOUND_CAP = 0.75;
-const PLAN_VERSION = 3; // bump when the daily-plan logic changes, so a frozen plan from an older build auto-refreshes
+const PLAN_VERSION = 4;
+// Parent-requested extra practice blocks, added to the daily plan until the given date.
+const PARENT_FOCUS = [{k:'alto', mode:'alto', until:'2026-11-15', t:'Alto clef check: 10 questions', d:'Extra practice Dad asked for (alto clef notes, key signatures and tonic triads — the Grade 4 book p.10 page). Go slowly: read the checklist at the top, and say each answer to yourself before you tap.', label:'▶ Start alto clef check'}]; // bump when the daily-plan logic changes, so a frozen plan from an older build auto-refreshes
 
 /* ---------- State ---------- */
 const DEFAULT = {
@@ -1354,7 +1399,7 @@ function adaptiveAlloc(n){ n = n||16; const all = weakBuckets(); if (!all.length
   for (let i=3; i<seen.length && used<n; i++) add(seen[i],1);
   let j=0; while (used<n && alloc.length && j<100) { alloc[j % Math.min(3, alloc.length)].count++; used++; j++; }
   return alloc; }
-const PLANNED_Q = {topic:15, sub:10, review:10, weak:16, mock:30, fix:8, quick:3};
+const PLANNED_Q = {alto:10, topic:15, sub:10, review:10, weak:16, mock:30, fix:8, quick:3};
 function stoppedEarly(t){ const p = t.planned || PLANNED_Q[t.mode]; return !!p && t.mode!=='quick' && t.total < Math.ceil(0.8*p); }
 function subTopic(sub){ const t = TOPICS.find(x=>x.subs.includes(sub)); return t ? t.id : null; }
 // Exam-level accuracy per sub-area, using only the most recent 20 answers per sub so improvement shows quickly.
@@ -1374,6 +1419,9 @@ function mockTrend(){ const ex = tests.filter(t=>t.mode==='mock' && t.level==='e
 
 /* 1-minute tips shown at the top of a Fix-it run. Written for the sub-areas Aryav's exam-level data shows as stuck. Anything not listed falls back to the topic lesson bullets. */
 const SUB_TIPS = {
+  'Alto clef workout': {tip:['Middle C is the MIDDLE line. Lines, bottom to top: F A C E G. Spaces: G B D F.','Above the stave: G (top line) → A (space) → B (first leger line) → C. Below: F (bottom line) → E (space) → D (first leger line) → C.','Minor key? Find the relative major FIRST — up a minor 3rd: C minor → E♭ major → 3 flats. A flat key never gets sharps.','Don’t forget the key signature itself (B♭ major = B♭ and E♭).','Tonic triad: the bottom note is the key’s tonic, then the 3rd and 5th — all on lines or all in spaces.','Last 10 seconds: re-read the key name, count the sharps/flats, check the triad’s bottom note.'], eg:'G minor → relative major B♭ → 2 flats (B♭, E♭). Tonic triad G–B♭–D, with the G on the bottom.'},
+  'Alto clef': {tip:['Middle C is the MIDDLE line. Lines, bottom to top: F A C E G. Spaces: G B D F.','Above the stave: A (space), B (first leger line), C. Below: E (space), D (first leger line), C.','Always count from middle C — don’t read it as if it were treble clef.'], eg:'The top line is G; the space just above it is A.'},
+  'Keys & tonic triads in alto clef': {tip:['The same key signature serves a major key and its relative minor — the triad tells you which.','Minor key: find the relative major first (up a minor 3rd) to get the key signature.','Tonic triad = notes 1, 3, 5 of the key, root on the bottom.'], eg:'3 flats + triad C–E♭–G → C minor. 3 flats + triad E♭–G–B♭ → E♭ major.'},
   'Transposing instruments': {tip:['These instruments SOUND lower than they are written. Learn four facts: B♭ clarinet and B♭ trumpet sound a major 2nd lower; A clarinet sounds a minor 3rd lower; horn in F and cor anglais sound a perfect 5th lower.','Trick: the instrument’s name is the note you HEAR when it plays a written C. B♭ trumpet plays written C → you hear B♭.','Written part → concert pitch: go DOWN by that interval.','Concert pitch → written part: go UP by that interval.','Move the key signature the same way as the notes.'], eg:'Horn in F, part written in D major. It sounds a perfect 5th lower: D → G. Answer: G major. (To make a horn SOUND in G major you would write in D major — up a 5th.)'},
   'Clefs & transposing instruments': {tip:['Alto clef = viola. Tenor clef = the high notes of the cello (also bassoon and trombone).','Octave transposers: piccolo sounds an octave HIGHER than written; double bass sounds an octave LOWER.','Interval transposers at Grade 5: clarinet in B♭ or A, trumpet in B♭, horn in F, cor anglais (in F).','NOT transposing: flute, oboe, bassoon, trombone, violin, viola, cello.'], eg:'“Which is NOT a transposing instrument: horn in F, trumpet in B♭, cor anglais, bassoon?” → bassoon (it sounds as written).'},
   'Instrument families & sound': {tip:['Woodwind, no reed: flute, piccolo. Single reed: clarinet, saxophone. Double reed: oboe, cor anglais, bassoon, contrabassoon.','Brass: the player’s lips buzz in a cup mouthpiece — trumpet, horn, trombone, tuba.','Strings, highest → lowest: violin, viola, cello, double bass. The harp is a string instrument too.','Percussion with a definite pitch: timpani, xylophone, glockenspiel, tubular bells. Without: snare drum, triangle, tambourine, cymbals, tam-tam.'], eg:'Cor anglais sounds like it should be brass, but it is a double-reed WOODWIND (an alto oboe).'},
@@ -1425,7 +1473,9 @@ function renderToday(){
     if (fix) items.push({k:'fix', m:Math.round(mins*0.3), t:`Fix-it: ${fix.sub}`, d:`Read the 1-minute tip at the top, then 8 Grade-5 questions on just this.${fix.acc!=null?` Your recent exam-level score here: ${Math.round(fix.acc*100)}% — target 85%.`:''} Read every explanation, especially the ones you get right by luck.`, acts:[{label:'▶ Start Fix-it', start:'fix', topic:fix.topic, sub:fix.sub},{label:'📖 Full lesson', sec:true, topic:fix.topic}]});
     else { planFallback = true; } if (!fix) items.push({k:'fix', m:Math.round(mins*0.3), t:`Learn: ${learn.name}`, d:'Read the short lesson on the topic card, then drill it.', acts:[{label:'📖 Read the lesson', topic:learn.id},{label:'Then drill it', sec:true, start:'topic', topic:learn.id}]});
     items.push({k:'drill', m:Math.round(mins*0.45), t: mockDay ? 'Full mock test (timed, all 30 questions)' : 'Weak-spot drill (adaptive, 16 questions)', d: mockDay ? 'Mock day (Wednesday and Saturday): all 30 questions in one sitting. Stopping early does not count.' : `Concentrated on your 3 weakest areas right now: ${topWeakAreas(3).join(', ')||'all areas'}. Finish all 16 — it only ticks when you do.`, acts: mockDay ? [{label:'▶ Start full mock', start:'mock'}] : [{label:'▶ Start weak-spot drill', start:'weak'}]});
-    items.push({k:'review', m:mins - Math.round(mins*0.3) - Math.round(mins*0.45), t:'Mixed recall: 10 questions on topics you’ve already done', d:'10 random questions from topics you’ve worked before, so older material stays fresh.', acts:[{label:'▶ Start mixed recall', start:'review'}]});
+    const pf = PARENT_FOCUS.filter(f=>date <= f.until);
+    if (pf.length) { items[0].m = Math.round(mins*0.25); items[1].m = Math.round(mins*0.35); pf.forEach(f=>items.push({k:f.k, m:Math.round(mins*0.2), t:f.t, d:f.d, acts:[{label:f.label, start:f.mode}]})); }
+    items.push({k:'review', m:mins - items.reduce((a,x)=>a+x.m,0), t:'Mixed recall: 10 questions on topics you’ve already done', d:'10 random questions from topics you’ve worked before, so older material stays fresh.', acts:[{label:'▶ Start mixed recall', start:'review'}]});
     $('#lessonNote').innerHTML = `<b>Theory only until the exam.</b> Pieces, scales, sight-reading and aural are still in their tabs for lesson time, but the daily plan stays on theory. <br><b>Lessons:</b> ${esc(S.settings.lesson1)}.`;
   } else {
     $('#todayPhase').textContent = 'Phase 2 · Practical'; $('#todayPhase').className='tag';
@@ -1519,7 +1569,7 @@ function renderAuralStats(){ const el = $('#auralAreas'); if (!el) return; el.in
 function renderSR(){ const el = $('#srAreas'); if (!el) return; el.innerHTML = SR_AREAS.map(([n,f])=>{ const sc = srAreaScore(f); const st = sc ? (sc.n<3?['No data yet','']:sc.score<45?['Needs work','bad']:sc.score<75?['Developing','warn']:sc.nx<3?['Secure at foundation','warn']:['Secure','good']) : ['No data yet','']; return `<div class="score"><span>${n}</span><span class="n">${sc?`${sc.n} piece${sc.n>1?'s':''}`:'none yet'}</span><span class="row" style="gap:6px"><span class="tag ${st[1]}">${st[0]}</span><span class="pct">${sc?Math.round(sc.score)+'%':'–'}</span></span><div class="bar thin"><i style="width:${sc?Math.round(sc.score):0}%"></i></div></div>`; }).join('');
   const all = srAreaScore(()=>true); $('#srOverall').textContent = all ? Math.round(all.score)+'%' : '–'; const wk = srEntries().filter(e=>Date.now()-e.ts < 7*86400000); $('#srStats').textContent = wk.length ? `This week: ${wk.length} piece${wk.length>1?'s':''}, average result ${(avg(wk.map(e=>e.r))).toFixed(1)} / 4. Results at foundation level count up to 65%.` : 'No pieces this week yet. Results at foundation level count up to 65%.'; }
 function renderLog(){
-  const label = {fix:'Fix-it',review:'Mixed recall',learn:'Theory learning',drill:'Drill / mock',prac:'Practical',prac2:'Pieces',prac3:'Sight-reading / aural'}; const today = todayISO();
+  const label = {alto:'Alto clef check',fix:'Fix-it',review:'Mixed recall',learn:'Theory learning',drill:'Drill / mock',prac:'Practical',prac2:'Pieces',prac3:'Sight-reading / aural'}; const today = todayISO();
   const days = []; for (let i=27;i>=0;i--) { const dt = new Date(); dt.setDate(dt.getDate()-i); days.push(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')); }
   const stat = iso => { const v = logs[iso]; if (!v || !Array.isArray(v.plan) || !v.plan.length) return {state:'none', pm:0, dm:0, n:0, dn:0}; const done = new Set(v.done||[]); const pm = v.plan.reduce((s,it)=>s+(it.m||0),0); const dm = v.plan.filter(it=>done.has(it.k)).reduce((s,it)=>s+(it.m||0),0); const dn = v.plan.filter(it=>done.has(it.k)).length; return {state: dn===v.plan.length?'full': dn>0?'part': iso===today?'open': onTravel(iso)?'travel':'missed', pm, dm, n:v.plan.length, dn}; };
   $('#logStrip').innerHTML = days.map(iso=>{ const s = stat(iso); const dt = new Date(iso+'T00:00:00'); return `<i class="${s.state}" title="${iso}: ${s.state==='none'?'no plan':`${s.dn}/${s.n} items, ${s.dm}/${s.pm} min`}"><b>${dt.getDate()}</b></i>`; }).join('');
@@ -1541,11 +1591,11 @@ function startTest(mode, topic, sub){
   T.setLevel(lvl); const qs = T.buildTest(mode==='fix' ? 'sub' : mode, topic, w); if (mode==='fix') qs.splice(PLANNED_Q.fix);
   run = { mode, topic, sub, qs, i:0, score:0, byTopic:{}, bySub:{}, answered:false, level: lvl, t0: Date.now(), quitArmed:false };
   const qb = $('#quitTest'); if (qb) { qb.textContent = 'End test'; qb.classList.remove('armed'); }
-  const tipEl = $('#runTip'); if (tipEl) { const h = mode==='fix' ? tipHTML(sub, topic) : ''; tipEl.hidden = !h; tipEl.innerHTML = h; }
+  const tipEl = $('#runTip'); if (tipEl) { const h = mode==='fix' ? tipHTML(sub, topic) : mode==='alto' ? tipHTML('Alto clef workout', 't2') : ''; tipEl.hidden = !h; tipEl.innerHTML = h; }
   clearInterval(window.__mockClock); const clk = $('#runClock'); if (clk) { clk.hidden = mode!=='mock'; clk.textContent = '0:00'; }
   if (mode==='mock') window.__mockClock = setInterval(()=>{ if (!run) { clearInterval(window.__mockClock); return; } const s = Math.floor((Date.now()-run.t0)/1000); const c = $('#runClock'); if (c) c.textContent = `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }, 1000);
   $('#testHome').hidden = true; $('#testDone').hidden = true; $('#testRun').hidden = false;
-  $('#runLabel').textContent = (lvl==='exam' ? 'Exam level · ' : 'Foundation level · ') + (mode==='fix' ? 'Fix-it: ' + sub : mode==='mock' ? 'Full mock' : mode==='weak' ? 'Weak-spot drill' : mode==='review' ? 'Mixed recall' : mode==='quick' ? 'Sync check' : mode==='sub' ? sub : 'Topic drill: ' + TOPICS.find(t=>t.id===topic).name);
+  $('#runLabel').textContent = (lvl==='exam' ? 'Exam level · ' : 'Foundation level · ') + (mode==='fix' ? 'Fix-it: ' + sub : mode==='alto' ? 'Alto clef check' : mode==='mock' ? 'Full mock' : mode==='weak' ? 'Weak-spot drill' : mode==='review' ? 'Mixed recall' : mode==='quick' ? 'Sync check' : mode==='sub' ? sub : 'Topic drill: ' + TOPICS.find(t=>t.id===topic).name);
   showQ();
 }
 function showQ(){
@@ -1570,7 +1620,7 @@ function showWorking(q){ const w = $('#qWork'); w.hidden = false; $('#showWork')
 function finishTest(){
   const total = run.i + (run.answered?1:0); if (!total) { backToTests(); return; }
   const rec = { ts: Date.now(), mode: run.mode, topic: run.topic||null, sub: run.sub||null, score: run.score, total, planned: run.qs.length, byTopic: run.byTopic, bySub: run.bySub, level: run.level || S.settings.level || 'foundation', secs: Math.round((Date.now()-(run.t0||Date.now()))/1000) };
-  const finished = total >= Math.ceil(0.8*run.qs.length); const doneKey = {fix:'fix', review:'review', weak:'drill', mock:'drill'}[run.mode];
+  const finished = total >= Math.ceil(0.8*run.qs.length); const doneKey = {fix:'fix', review:'review', weak:'drill', mock:'drill', alto:'alto'}[run.mode];
   clearInterval(window.__mockClock);
   const id = 't' + rec.ts;
   tests.unshift({id, ...rec}); lsSet('g5:tests', tests); if (db) db.collection('tests').doc(id).set(rec).catch(e=>toast('Could not save test: '+(e.code||'')));
