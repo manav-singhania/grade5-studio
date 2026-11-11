@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-11-08.0605';</script>
+<script>window.__G5_BUILD__='2026-11-12.0600';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1272,7 +1272,9 @@ const AURAL = [
 ];
 const TOPIC_WEIGHT = {t1:1,t2:1.2,t3:1.2,t4:.6,t5:1.3,t6:.8,t7:1.3,t8:1,t9:.8,t10:1,t11:1.2};
 const FOUND_CAP = 0.75;
-const PLAN_VERSION = 4;
+const PLAN_VERSION = 5;
+// A parent-requested block retires early once he has shown it is secure: his last 2 finished runs of it both 9/10 or better.
+function focusMastered(mode){ const runs = tests.filter(t=>t.mode===mode && t.total>=9).sort((a,b)=>b.ts-a.ts).slice(0,2); return runs.length===2 && runs.every(t=>t.score/t.total>=0.9); }
 // Parent-requested extra practice blocks, added to the daily plan until the given date.
 const PARENT_FOCUS = [{k:'alto', mode:'alto', until:'2026-11-15', t:'Alto clef check: 10 questions', d:'Extra practice Dad asked for (alto clef notes, key signatures and tonic triads — the Grade 4 book p.10 page). Go slowly: read the checklist at the top, and say each answer to yourself before you tap.', label:'▶ Start alto clef check'}]; // bump when the daily-plan logic changes, so a frozen plan from an older build auto-refreshes
 
@@ -1481,7 +1483,7 @@ function renderToday(){
     if (fix) items.push({k:'fix', m:Math.round(mins*0.3), t:`Fix-it: ${fix.sub}`, d:`Read the 1-minute tip at the top, then 8 Grade-5 questions on just this.${fix.acc!=null?` Your recent exam-level score here: ${Math.round(fix.acc*100)}% — target 85%.`:''} Read every explanation, especially the ones you get right by luck.`, acts:[{label:'▶ Start Fix-it', start:'fix', topic:fix.topic, sub:fix.sub},{label:'📖 Full lesson', sec:true, topic:fix.topic}]});
     else { planFallback = true; } if (!fix) items.push({k:'fix', m:Math.round(mins*0.3), t:`Learn: ${learn.name}`, d:'Read the short lesson on the topic card, then drill it.', acts:[{label:'📖 Read the lesson', topic:learn.id},{label:'Then drill it', sec:true, start:'topic', topic:learn.id}]});
     items.push({k:'drill', m:Math.round(mins*0.45), t: mockDay ? 'Full mock test (timed, all 30 questions)' : 'Weak-spot drill (adaptive, 16 questions)', d: mockDay ? 'Mock day (Wednesday and Saturday): all 30 questions in one sitting. Stopping early does not count.' : `Concentrated on your 3 weakest areas right now: ${topWeakAreas(3).join(', ')||'all areas'}. Finish all 16 — it only ticks when you do.`, acts: mockDay ? [{label:'▶ Start full mock', start:'mock'}] : [{label:'▶ Start weak-spot drill', start:'weak'}]});
-    const pf = PARENT_FOCUS.filter(f=>date <= f.until);
+    const pf = PARENT_FOCUS.filter(f=>date <= f.until && !focusMastered(f.mode));
     if (pf.length) { items[0].m = Math.round(mins*0.25); items[1].m = Math.round(mins*0.35); pf.forEach(f=>items.push({k:f.k, m:Math.round(mins*0.2), t:f.t, d:f.d, acts:[{label:f.label, start:f.mode}]})); }
     items.push({k:'review', m:mins - items.reduce((a,x)=>a+x.m,0), t:'Mixed recall: 10 questions on topics you’ve already done', d:'10 random questions from topics you’ve worked before, so older material stays fresh.', acts:[{label:'▶ Start mixed recall', start:'review'}]});
     $('#lessonNote').innerHTML = `<b>Theory only until the exam.</b> Pieces, scales, sight-reading and aural are still in their tabs for lesson time, but the daily plan stays on theory. <br><b>Lessons:</b> ${esc(S.settings.lesson1)}.`;
