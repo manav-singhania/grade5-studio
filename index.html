@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script src="config.js"></script>
-<script>window.__G5_BUILD__='2026-11-12.0600';</script>
+<script>window.__G5_BUILD__='2026-11-12.0610';</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1496,7 +1496,7 @@ function renderToday(){
   }
   let plan = items;
   const stored = logs[date];
-  const fresh = stored && Array.isArray(stored.plan) && stored.plan.length && stored.pv === PLAN_VERSION && !(stored.fb && !planFallback); // a fallback plan made before data synced is upgraded once Fix-it targets exist
+  const fresh = stored && Array.isArray(stored.plan) && stored.plan.length && stored.pv === PLAN_VERSION && !(stored.fb && !planFallback) && !(stored.plan||[]).some(it=>PARENT_FOCUS.some(f=>f.k===it.k && focusMastered(f.mode))); // a fallback plan made before data synced is upgraded once Fix-it targets exist
   if (fresh) plan = stored.plan;
   else if (!todayFrozen || !fresh) { todayFrozen = true; const rec = { date, done: (stored&&stored.done)||[], plan: items.map(it=>({k:it.k, t:it.t, m:it.m, d:it.d, acts:it.acts||[]})), phase: phase1?1:2, pv: PLAN_VERSION, fb: planFallback }; logs[date] = rec; if (db) db.collection('log').doc(date).set(rec).catch(()=>{}); else lsSet('g5:logs', logs); }
   const done = (logs[date] && logs[date].done) || [];
